@@ -21,13 +21,13 @@ import { Route as AppUploadRouteImport } from './routes/_app/upload'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppQrScannerRouteImport } from './routes/_app/qr-scanner'
-import { Route as AppInvoicesRouteImport } from './routes/_app/invoices'
 import { Route as AppHelpRouteImport } from './routes/_app/help'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppCustomersRouteImport } from './routes/_app/customers'
 import { Route as AppCompanyRouteImport } from './routes/_app/company'
-import { Route as AppInvoicesNewRouteImport } from './routes/_app/invoices_.new'
-import { Route as AppInvoicesIdRouteImport } from './routes/_app/invoices_.$id'
+import { Route as AppInvoicesIndexRouteImport } from './routes/_app/invoices.index'
+import { Route as AppInvoicesNewRouteImport } from './routes/_app/invoices.new'
+import { Route as AppInvoicesIdRouteImport } from './routes/_app/invoices.$id'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
@@ -88,11 +88,6 @@ const AppQrScannerRoute = AppQrScannerRouteImport.update({
   path: '/qr-scanner',
   getParentRoute: () => AppRoute,
 } as any)
-const AppInvoicesRoute = AppInvoicesRouteImport.update({
-  id: '/invoices',
-  path: '/invoices',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppHelpRoute = AppHelpRouteImport.update({
   id: '/help',
   path: '/help',
@@ -113,13 +108,18 @@ const AppCompanyRoute = AppCompanyRouteImport.update({
   path: '/company',
   getParentRoute: () => AppRoute,
 } as any)
+const AppInvoicesIndexRoute = AppInvoicesIndexRouteImport.update({
+  id: '/invoices/',
+  path: '/invoices/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppInvoicesNewRoute = AppInvoicesNewRouteImport.update({
-  id: '/invoices_/new',
+  id: '/invoices/new',
   path: '/invoices/new',
   getParentRoute: () => AppRoute,
 } as any)
 const AppInvoicesIdRoute = AppInvoicesIdRouteImport.update({
-  id: '/invoices_/$id',
+  id: '/invoices/$id',
   path: '/invoices/$id',
   getParentRoute: () => AppRoute,
 } as any)
@@ -135,7 +135,6 @@ export interface FileRoutesByFullPath {
   '/customers': typeof AppCustomersRoute
   '/dashboard': typeof AppDashboardRoute
   '/help': typeof AppHelpRoute
-  '/invoices': typeof AppInvoicesRoute
   '/qr-scanner': typeof AppQrScannerRoute
   '/reports': typeof AppReportsRoute
   '/settings': typeof AppSettingsRoute
@@ -143,6 +142,7 @@ export interface FileRoutesByFullPath {
   '/validation': typeof AppValidationRoute
   '/invoices/$id': typeof AppInvoicesIdRoute
   '/invoices/new': typeof AppInvoicesNewRoute
+  '/invoices/': typeof AppInvoicesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -155,7 +155,6 @@ export interface FileRoutesByTo {
   '/customers': typeof AppCustomersRoute
   '/dashboard': typeof AppDashboardRoute
   '/help': typeof AppHelpRoute
-  '/invoices': typeof AppInvoicesRoute
   '/qr-scanner': typeof AppQrScannerRoute
   '/reports': typeof AppReportsRoute
   '/settings': typeof AppSettingsRoute
@@ -163,6 +162,7 @@ export interface FileRoutesByTo {
   '/validation': typeof AppValidationRoute
   '/invoices/$id': typeof AppInvoicesIdRoute
   '/invoices/new': typeof AppInvoicesNewRoute
+  '/invoices': typeof AppInvoicesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -177,14 +177,14 @@ export interface FileRoutesById {
   '/_app/customers': typeof AppCustomersRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/help': typeof AppHelpRoute
-  '/_app/invoices': typeof AppInvoicesRoute
   '/_app/qr-scanner': typeof AppQrScannerRoute
   '/_app/reports': typeof AppReportsRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/upload': typeof AppUploadRoute
   '/_app/validation': typeof AppValidationRoute
-  '/_app/invoices_/$id': typeof AppInvoicesIdRoute
-  '/_app/invoices_/new': typeof AppInvoicesNewRoute
+  '/_app/invoices/$id': typeof AppInvoicesIdRoute
+  '/_app/invoices/new': typeof AppInvoicesNewRoute
+  '/_app/invoices/': typeof AppInvoicesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -199,7 +199,6 @@ export interface FileRouteTypes {
     | '/customers'
     | '/dashboard'
     | '/help'
-    | '/invoices'
     | '/qr-scanner'
     | '/reports'
     | '/settings'
@@ -207,6 +206,7 @@ export interface FileRouteTypes {
     | '/validation'
     | '/invoices/$id'
     | '/invoices/new'
+    | '/invoices/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -219,7 +219,6 @@ export interface FileRouteTypes {
     | '/customers'
     | '/dashboard'
     | '/help'
-    | '/invoices'
     | '/qr-scanner'
     | '/reports'
     | '/settings'
@@ -227,6 +226,7 @@ export interface FileRouteTypes {
     | '/validation'
     | '/invoices/$id'
     | '/invoices/new'
+    | '/invoices'
   id:
     | '__root__'
     | '/'
@@ -240,14 +240,14 @@ export interface FileRouteTypes {
     | '/_app/customers'
     | '/_app/dashboard'
     | '/_app/help'
-    | '/_app/invoices'
     | '/_app/qr-scanner'
     | '/_app/reports'
     | '/_app/settings'
     | '/_app/upload'
     | '/_app/validation'
-    | '/_app/invoices_/$id'
-    | '/_app/invoices_/new'
+    | '/_app/invoices/$id'
+    | '/_app/invoices/new'
+    | '/_app/invoices/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -346,13 +346,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppQrScannerRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/invoices': {
-      id: '/_app/invoices'
-      path: '/invoices'
-      fullPath: '/invoices'
-      preLoaderRoute: typeof AppInvoicesRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/help': {
       id: '/_app/help'
       path: '/help'
@@ -381,15 +374,22 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCompanyRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/invoices_/new': {
-      id: '/_app/invoices_/new'
+    '/_app/invoices/': {
+      id: '/_app/invoices/'
+      path: '/invoices'
+      fullPath: '/invoices/'
+      preLoaderRoute: typeof AppInvoicesIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/invoices/new': {
+      id: '/_app/invoices/new'
       path: '/invoices/new'
       fullPath: '/invoices/new'
       preLoaderRoute: typeof AppInvoicesNewRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/invoices_/$id': {
-      id: '/_app/invoices_/$id'
+    '/_app/invoices/$id': {
+      id: '/_app/invoices/$id'
       path: '/invoices/$id'
       fullPath: '/invoices/$id'
       preLoaderRoute: typeof AppInvoicesIdRouteImport
@@ -403,7 +403,6 @@ interface AppRouteChildren {
   AppCustomersRoute: typeof AppCustomersRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppHelpRoute: typeof AppHelpRoute
-  AppInvoicesRoute: typeof AppInvoicesRoute
   AppQrScannerRoute: typeof AppQrScannerRoute
   AppReportsRoute: typeof AppReportsRoute
   AppSettingsRoute: typeof AppSettingsRoute
@@ -411,6 +410,7 @@ interface AppRouteChildren {
   AppValidationRoute: typeof AppValidationRoute
   AppInvoicesIdRoute: typeof AppInvoicesIdRoute
   AppInvoicesNewRoute: typeof AppInvoicesNewRoute
+  AppInvoicesIndexRoute: typeof AppInvoicesIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -418,7 +418,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppCustomersRoute: AppCustomersRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppHelpRoute: AppHelpRoute,
-  AppInvoicesRoute: AppInvoicesRoute,
   AppQrScannerRoute: AppQrScannerRoute,
   AppReportsRoute: AppReportsRoute,
   AppSettingsRoute: AppSettingsRoute,
@@ -426,6 +425,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppValidationRoute: AppValidationRoute,
   AppInvoicesIdRoute: AppInvoicesIdRoute,
   AppInvoicesNewRoute: AppInvoicesNewRoute,
+  AppInvoicesIndexRoute: AppInvoicesIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

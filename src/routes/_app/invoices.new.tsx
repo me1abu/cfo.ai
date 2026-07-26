@@ -14,7 +14,7 @@ import { Trash2, Plus, Save, Eye, FileDown, QrCode, ShieldCheck, Mail, Printer, 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_app/invoices_/new")({
+export const Route = createFileRoute("/_app/invoices/new")({
   head: () => ({ meta: [{ title: "New invoice · AI Invoice Saudi" }, { name: "description", content: "Create a new invoice." }] }),
   component: () => <InvoiceEditor mode="new" />,
 });

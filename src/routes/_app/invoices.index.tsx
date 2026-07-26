@@ -13,7 +13,7 @@ import { Plus, Search, MoreHorizontal, ArrowUpDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-export const Route = createFileRoute("/_app/invoices")({
+export const Route = createFileRoute("/_app/invoices/")({
   head: () => ({ meta: [{ title: "Invoices · AI Invoice Saudi" }, { name: "description", content: "Search and manage your invoices." }] }),
   component: Invoices,
 });
