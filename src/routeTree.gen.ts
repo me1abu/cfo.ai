@@ -21,6 +21,7 @@ import { Route as AppUploadRouteImport } from './routes/_app/upload'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppQrScannerRouteImport } from './routes/_app/qr-scanner'
+import { Route as AppInvoicesRouteImport } from './routes/_app/invoices'
 import { Route as AppHelpRouteImport } from './routes/_app/help'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppCustomersRouteImport } from './routes/_app/customers'
@@ -88,6 +89,11 @@ const AppQrScannerRoute = AppQrScannerRouteImport.update({
   path: '/qr-scanner',
   getParentRoute: () => AppRoute,
 } as any)
+const AppInvoicesRoute = AppInvoicesRouteImport.update({
+  id: '/invoices',
+  path: '/invoices',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppHelpRoute = AppHelpRouteImport.update({
   id: '/help',
   path: '/help',
@@ -109,19 +115,19 @@ const AppCompanyRoute = AppCompanyRouteImport.update({
   getParentRoute: () => AppRoute,
 } as any)
 const AppInvoicesIndexRoute = AppInvoicesIndexRouteImport.update({
-  id: '/invoices/',
-  path: '/invoices/',
-  getParentRoute: () => AppRoute,
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppInvoicesRoute,
 } as any)
 const AppInvoicesNewRoute = AppInvoicesNewRouteImport.update({
-  id: '/invoices/new',
-  path: '/invoices/new',
-  getParentRoute: () => AppRoute,
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppInvoicesRoute,
 } as any)
 const AppInvoicesIdRoute = AppInvoicesIdRouteImport.update({
-  id: '/invoices/$id',
-  path: '/invoices/$id',
-  getParentRoute: () => AppRoute,
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => AppInvoicesRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -135,6 +141,7 @@ export interface FileRoutesByFullPath {
   '/customers': typeof AppCustomersRoute
   '/dashboard': typeof AppDashboardRoute
   '/help': typeof AppHelpRoute
+  '/invoices': typeof AppInvoicesRouteWithChildren
   '/qr-scanner': typeof AppQrScannerRoute
   '/reports': typeof AppReportsRoute
   '/settings': typeof AppSettingsRoute
@@ -177,6 +184,7 @@ export interface FileRoutesById {
   '/_app/customers': typeof AppCustomersRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/help': typeof AppHelpRoute
+  '/_app/invoices': typeof AppInvoicesRouteWithChildren
   '/_app/qr-scanner': typeof AppQrScannerRoute
   '/_app/reports': typeof AppReportsRoute
   '/_app/settings': typeof AppSettingsRoute
@@ -199,6 +207,7 @@ export interface FileRouteTypes {
     | '/customers'
     | '/dashboard'
     | '/help'
+    | '/invoices'
     | '/qr-scanner'
     | '/reports'
     | '/settings'
@@ -240,6 +249,7 @@ export interface FileRouteTypes {
     | '/_app/customers'
     | '/_app/dashboard'
     | '/_app/help'
+    | '/_app/invoices'
     | '/_app/qr-scanner'
     | '/_app/reports'
     | '/_app/settings'
@@ -346,6 +356,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppQrScannerRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/invoices': {
+      id: '/_app/invoices'
+      path: '/invoices'
+      fullPath: '/invoices'
+      preLoaderRoute: typeof AppInvoicesRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/help': {
       id: '/_app/help'
       path: '/help'
@@ -376,41 +393,55 @@ declare module '@tanstack/react-router' {
     }
     '/_app/invoices/': {
       id: '/_app/invoices/'
-      path: '/invoices'
+      path: '/'
       fullPath: '/invoices/'
       preLoaderRoute: typeof AppInvoicesIndexRouteImport
-      parentRoute: typeof AppRoute
+      parentRoute: typeof AppInvoicesRoute
     }
     '/_app/invoices/new': {
       id: '/_app/invoices/new'
-      path: '/invoices/new'
+      path: '/new'
       fullPath: '/invoices/new'
       preLoaderRoute: typeof AppInvoicesNewRouteImport
-      parentRoute: typeof AppRoute
+      parentRoute: typeof AppInvoicesRoute
     }
     '/_app/invoices/$id': {
       id: '/_app/invoices/$id'
-      path: '/invoices/$id'
+      path: '/$id'
       fullPath: '/invoices/$id'
       preLoaderRoute: typeof AppInvoicesIdRouteImport
-      parentRoute: typeof AppRoute
+      parentRoute: typeof AppInvoicesRoute
     }
   }
 }
+
+interface AppInvoicesRouteChildren {
+  AppInvoicesIdRoute: typeof AppInvoicesIdRoute
+  AppInvoicesNewRoute: typeof AppInvoicesNewRoute
+  AppInvoicesIndexRoute: typeof AppInvoicesIndexRoute
+}
+
+const AppInvoicesRouteChildren: AppInvoicesRouteChildren = {
+  AppInvoicesIdRoute: AppInvoicesIdRoute,
+  AppInvoicesNewRoute: AppInvoicesNewRoute,
+  AppInvoicesIndexRoute: AppInvoicesIndexRoute,
+}
+
+const AppInvoicesRouteWithChildren = AppInvoicesRoute._addFileChildren(
+  AppInvoicesRouteChildren,
+)
 
 interface AppRouteChildren {
   AppCompanyRoute: typeof AppCompanyRoute
   AppCustomersRoute: typeof AppCustomersRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppHelpRoute: typeof AppHelpRoute
+  AppInvoicesRoute: typeof AppInvoicesRouteWithChildren
   AppQrScannerRoute: typeof AppQrScannerRoute
   AppReportsRoute: typeof AppReportsRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppUploadRoute: typeof AppUploadRoute
   AppValidationRoute: typeof AppValidationRoute
-  AppInvoicesIdRoute: typeof AppInvoicesIdRoute
-  AppInvoicesNewRoute: typeof AppInvoicesNewRoute
-  AppInvoicesIndexRoute: typeof AppInvoicesIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -418,14 +449,12 @@ const AppRouteChildren: AppRouteChildren = {
   AppCustomersRoute: AppCustomersRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppHelpRoute: AppHelpRoute,
+  AppInvoicesRoute: AppInvoicesRouteWithChildren,
   AppQrScannerRoute: AppQrScannerRoute,
   AppReportsRoute: AppReportsRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppUploadRoute: AppUploadRoute,
   AppValidationRoute: AppValidationRoute,
-  AppInvoicesIdRoute: AppInvoicesIdRoute,
-  AppInvoicesNewRoute: AppInvoicesNewRoute,
-  AppInvoicesIndexRoute: AppInvoicesIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
