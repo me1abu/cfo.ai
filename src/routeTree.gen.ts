@@ -18,6 +18,8 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppInvoicesRouteImport } from './routes/_app/invoices'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
+import { Route as AppInvoicesNewRouteImport } from './routes/_app/invoices_.new'
+import { Route as AppInvoicesIdRouteImport } from './routes/_app/invoices_.$id'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
@@ -63,6 +65,16 @@ const AppDashboardRoute = AppDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AppRoute,
 } as any)
+const AppInvoicesNewRoute = AppInvoicesNewRouteImport.update({
+  id: '/invoices_/new',
+  path: '/invoices/new',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppInvoicesIdRoute = AppInvoicesIdRouteImport.update({
+  id: '/invoices_/$id',
+  path: '/invoices/$id',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -73,6 +85,8 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof VerifyEmailRoute
   '/dashboard': typeof AppDashboardRoute
   '/invoices': typeof AppInvoicesRoute
+  '/invoices/$id': typeof AppInvoicesIdRoute
+  '/invoices/new': typeof AppInvoicesNewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -83,6 +97,8 @@ export interface FileRoutesByTo {
   '/verify-email': typeof VerifyEmailRoute
   '/dashboard': typeof AppDashboardRoute
   '/invoices': typeof AppInvoicesRoute
+  '/invoices/$id': typeof AppInvoicesIdRoute
+  '/invoices/new': typeof AppInvoicesNewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -95,6 +111,8 @@ export interface FileRoutesById {
   '/verify-email': typeof VerifyEmailRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/invoices': typeof AppInvoicesRoute
+  '/_app/invoices_/$id': typeof AppInvoicesIdRoute
+  '/_app/invoices_/new': typeof AppInvoicesNewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -107,6 +125,8 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/dashboard'
     | '/invoices'
+    | '/invoices/$id'
+    | '/invoices/new'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -117,6 +137,8 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/dashboard'
     | '/invoices'
+    | '/invoices/$id'
+    | '/invoices/new'
   id:
     | '__root__'
     | '/'
@@ -128,6 +150,8 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/_app/dashboard'
     | '/_app/invoices'
+    | '/_app/invoices_/$id'
+    | '/_app/invoices_/new'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -205,17 +229,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDashboardRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/invoices_/new': {
+      id: '/_app/invoices_/new'
+      path: '/invoices/new'
+      fullPath: '/invoices/new'
+      preLoaderRoute: typeof AppInvoicesNewRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/invoices_/$id': {
+      id: '/_app/invoices_/$id'
+      path: '/invoices/$id'
+      fullPath: '/invoices/$id'
+      preLoaderRoute: typeof AppInvoicesIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
   AppDashboardRoute: typeof AppDashboardRoute
   AppInvoicesRoute: typeof AppInvoicesRoute
+  AppInvoicesIdRoute: typeof AppInvoicesIdRoute
+  AppInvoicesNewRoute: typeof AppInvoicesNewRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppDashboardRoute: AppDashboardRoute,
   AppInvoicesRoute: AppInvoicesRoute,
+  AppInvoicesIdRoute: AppInvoicesIdRoute,
+  AppInvoicesNewRoute: AppInvoicesNewRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
