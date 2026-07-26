@@ -16,8 +16,16 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppValidationRouteImport } from './routes/_app/validation'
+import { Route as AppUploadRouteImport } from './routes/_app/upload'
+import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppReportsRouteImport } from './routes/_app/reports'
+import { Route as AppQrScannerRouteImport } from './routes/_app/qr-scanner'
 import { Route as AppInvoicesRouteImport } from './routes/_app/invoices'
+import { Route as AppHelpRouteImport } from './routes/_app/help'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
+import { Route as AppCustomersRouteImport } from './routes/_app/customers'
+import { Route as AppCompanyRouteImport } from './routes/_app/company'
 import { Route as AppInvoicesNewRouteImport } from './routes/_app/invoices_.new'
 import { Route as AppInvoicesIdRouteImport } from './routes/_app/invoices_.$id'
 
@@ -55,14 +63,54 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppValidationRoute = AppValidationRouteImport.update({
+  id: '/validation',
+  path: '/validation',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppUploadRoute = AppUploadRouteImport.update({
+  id: '/upload',
+  path: '/upload',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppReportsRoute = AppReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppQrScannerRoute = AppQrScannerRouteImport.update({
+  id: '/qr-scanner',
+  path: '/qr-scanner',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppInvoicesRoute = AppInvoicesRouteImport.update({
   id: '/invoices',
   path: '/invoices',
   getParentRoute: () => AppRoute,
 } as any)
+const AppHelpRoute = AppHelpRouteImport.update({
+  id: '/help',
+  path: '/help',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDashboardRoute = AppDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCustomersRoute = AppCustomersRouteImport.update({
+  id: '/customers',
+  path: '/customers',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCompanyRoute = AppCompanyRouteImport.update({
+  id: '/company',
+  path: '/company',
   getParentRoute: () => AppRoute,
 } as any)
 const AppInvoicesNewRoute = AppInvoicesNewRouteImport.update({
@@ -83,8 +131,16 @@ export interface FileRoutesByFullPath {
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/company': typeof AppCompanyRoute
+  '/customers': typeof AppCustomersRoute
   '/dashboard': typeof AppDashboardRoute
+  '/help': typeof AppHelpRoute
   '/invoices': typeof AppInvoicesRoute
+  '/qr-scanner': typeof AppQrScannerRoute
+  '/reports': typeof AppReportsRoute
+  '/settings': typeof AppSettingsRoute
+  '/upload': typeof AppUploadRoute
+  '/validation': typeof AppValidationRoute
   '/invoices/$id': typeof AppInvoicesIdRoute
   '/invoices/new': typeof AppInvoicesNewRoute
 }
@@ -95,8 +151,16 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/company': typeof AppCompanyRoute
+  '/customers': typeof AppCustomersRoute
   '/dashboard': typeof AppDashboardRoute
+  '/help': typeof AppHelpRoute
   '/invoices': typeof AppInvoicesRoute
+  '/qr-scanner': typeof AppQrScannerRoute
+  '/reports': typeof AppReportsRoute
+  '/settings': typeof AppSettingsRoute
+  '/upload': typeof AppUploadRoute
+  '/validation': typeof AppValidationRoute
   '/invoices/$id': typeof AppInvoicesIdRoute
   '/invoices/new': typeof AppInvoicesNewRoute
 }
@@ -109,8 +173,16 @@ export interface FileRoutesById {
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/_app/company': typeof AppCompanyRoute
+  '/_app/customers': typeof AppCustomersRoute
   '/_app/dashboard': typeof AppDashboardRoute
+  '/_app/help': typeof AppHelpRoute
   '/_app/invoices': typeof AppInvoicesRoute
+  '/_app/qr-scanner': typeof AppQrScannerRoute
+  '/_app/reports': typeof AppReportsRoute
+  '/_app/settings': typeof AppSettingsRoute
+  '/_app/upload': typeof AppUploadRoute
+  '/_app/validation': typeof AppValidationRoute
   '/_app/invoices_/$id': typeof AppInvoicesIdRoute
   '/_app/invoices_/new': typeof AppInvoicesNewRoute
 }
@@ -123,8 +195,16 @@ export interface FileRouteTypes {
     | '/register'
     | '/reset-password'
     | '/verify-email'
+    | '/company'
+    | '/customers'
     | '/dashboard'
+    | '/help'
     | '/invoices'
+    | '/qr-scanner'
+    | '/reports'
+    | '/settings'
+    | '/upload'
+    | '/validation'
     | '/invoices/$id'
     | '/invoices/new'
   fileRoutesByTo: FileRoutesByTo
@@ -135,8 +215,16 @@ export interface FileRouteTypes {
     | '/register'
     | '/reset-password'
     | '/verify-email'
+    | '/company'
+    | '/customers'
     | '/dashboard'
+    | '/help'
     | '/invoices'
+    | '/qr-scanner'
+    | '/reports'
+    | '/settings'
+    | '/upload'
+    | '/validation'
     | '/invoices/$id'
     | '/invoices/new'
   id:
@@ -148,8 +236,16 @@ export interface FileRouteTypes {
     | '/register'
     | '/reset-password'
     | '/verify-email'
+    | '/_app/company'
+    | '/_app/customers'
     | '/_app/dashboard'
+    | '/_app/help'
     | '/_app/invoices'
+    | '/_app/qr-scanner'
+    | '/_app/reports'
+    | '/_app/settings'
+    | '/_app/upload'
+    | '/_app/validation'
     | '/_app/invoices_/$id'
     | '/_app/invoices_/new'
   fileRoutesById: FileRoutesById
@@ -215,6 +311,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/validation': {
+      id: '/_app/validation'
+      path: '/validation'
+      fullPath: '/validation'
+      preLoaderRoute: typeof AppValidationRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/upload': {
+      id: '/_app/upload'
+      path: '/upload'
+      fullPath: '/upload'
+      preLoaderRoute: typeof AppUploadRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/settings': {
+      id: '/_app/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/reports': {
+      id: '/_app/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof AppReportsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/qr-scanner': {
+      id: '/_app/qr-scanner'
+      path: '/qr-scanner'
+      fullPath: '/qr-scanner'
+      preLoaderRoute: typeof AppQrScannerRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/invoices': {
       id: '/_app/invoices'
       path: '/invoices'
@@ -222,11 +353,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppInvoicesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/help': {
+      id: '/_app/help'
+      path: '/help'
+      fullPath: '/help'
+      preLoaderRoute: typeof AppHelpRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/dashboard': {
       id: '/_app/dashboard'
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/customers': {
+      id: '/_app/customers'
+      path: '/customers'
+      fullPath: '/customers'
+      preLoaderRoute: typeof AppCustomersRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/company': {
+      id: '/_app/company'
+      path: '/company'
+      fullPath: '/company'
+      preLoaderRoute: typeof AppCompanyRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/invoices_/new': {
@@ -247,15 +399,31 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppCompanyRoute: typeof AppCompanyRoute
+  AppCustomersRoute: typeof AppCustomersRoute
   AppDashboardRoute: typeof AppDashboardRoute
+  AppHelpRoute: typeof AppHelpRoute
   AppInvoicesRoute: typeof AppInvoicesRoute
+  AppQrScannerRoute: typeof AppQrScannerRoute
+  AppReportsRoute: typeof AppReportsRoute
+  AppSettingsRoute: typeof AppSettingsRoute
+  AppUploadRoute: typeof AppUploadRoute
+  AppValidationRoute: typeof AppValidationRoute
   AppInvoicesIdRoute: typeof AppInvoicesIdRoute
   AppInvoicesNewRoute: typeof AppInvoicesNewRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppCompanyRoute: AppCompanyRoute,
+  AppCustomersRoute: AppCustomersRoute,
   AppDashboardRoute: AppDashboardRoute,
+  AppHelpRoute: AppHelpRoute,
   AppInvoicesRoute: AppInvoicesRoute,
+  AppQrScannerRoute: AppQrScannerRoute,
+  AppReportsRoute: AppReportsRoute,
+  AppSettingsRoute: AppSettingsRoute,
+  AppUploadRoute: AppUploadRoute,
+  AppValidationRoute: AppValidationRoute,
   AppInvoicesIdRoute: AppInvoicesIdRoute,
   AppInvoicesNewRoute: AppInvoicesNewRoute,
 }
