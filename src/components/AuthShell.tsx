@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -35,7 +35,7 @@ export function AuthShell({
       <div className="hidden bg-gradient-to-br from-primary/95 via-primary to-primary/80 p-10 text-primary-foreground lg:flex lg:flex-col lg:justify-between">
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium backdrop-blur">
-            <Sparkles className="h-3.5 w-3.5" /> ZATCA Phase 2 · e-invoicing ready
+            <Sparkles className="h-3.5 w-3.5" /> ZATCA-ready e-invoicing
           </div>
           <h2 className="mt-6 max-w-md text-3xl font-semibold leading-tight">
             Turn any document into a compliant Saudi invoice — instantly.
@@ -60,5 +60,3 @@ export function AuthShell({
     </div>
   );
 }
-
-export { useNavigate };

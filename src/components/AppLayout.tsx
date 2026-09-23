@@ -1,4 +1,11 @@
-import { Link, Outlet, useRouter, useLocation, useNavigate } from "@tanstack/react-router";
+import {
+  Link,
+  Outlet,
+  useRouter,
+  useLocation,
+  useNavigate,
+  useRouteContext,
+} from "@tanstack/react-router";
 import {
   LayoutDashboard,
   FileText,
@@ -18,8 +25,8 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useStore, logout } from "@/lib/store";
+import { useState } from "react";
+import { signOut } from "@/server/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -62,8 +69,20 @@ function Brand() {
   );
 }
 
+function useLogout() {
+  const navigate = useNavigate();
+  const router = useRouter();
+  return async () => {
+    await signOut();
+    await router.invalidate();
+    toast.success("Signed out");
+    navigate({ to: "/login" });
+  };
+}
+
 function SideNav({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation();
+  const logout = useLogout();
   return (
     <nav className="flex h-full flex-col gap-1 px-3 py-4">
       <div className="mb-4">
@@ -93,11 +112,7 @@ function SideNav({ onNavigate }: { onNavigate?: () => void }) {
       })}
       <div className="mt-auto pt-4">
         <button
-          onClick={() => {
-            logout();
-            toast.success("Signed out");
-            window.location.href = "/login";
-          }}
+          onClick={logout}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/60"
         >
           <LogOut className="h-4 w-4" /> Logout
@@ -196,17 +211,18 @@ function AssistantPanel({ open, onClose }: { open: boolean; onClose: () => void 
 }
 
 export function AppLayout() {
-  const user = useStore((s) => s.auth.user);
+  const { user } = useRouteContext({ from: "/_app" });
   const router = useRouter();
-  const navigate = useNavigate();
+  const logout = useLogout();
   const [assistantOpen, setAssistantOpen] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!user) navigate({ to: "/login" });
-  }, [user, navigate]);
-
-  if (!user) return null;
+  const initials =
+    user.name
+      .split(" ")
+      .filter(Boolean)
+      .map((x) => x[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || user.email[0].toUpperCase();
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -246,14 +262,12 @@ export function AppLayout() {
                 <button className="flex items-center gap-2 rounded-full pl-1 pr-3 py-1 hover:bg-accent">
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                      {user.name
-                        .split(" ")
-                        .map((x) => x[0])
-                        .slice(0, 2)
-                        .join("")}
+                      {initials}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="hidden text-sm font-medium sm:inline">{user.name}</span>
+                  <span className="hidden text-sm font-medium sm:inline">
+                    {user.name || user.email}
+                  </span>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -266,14 +280,7 @@ export function AppLayout() {
                   Company profile
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => {
-                    logout();
-                    window.location.href = "/login";
-                  }}
-                >
-                  Logout
-                </DropdownMenuItem>
+                <DropdownMenuItem onClick={logout}>Logout</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

@@ -1,12 +1,15 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthShell } from "@/components/AuthShell";
+import { exchangeResetCode, updatePassword } from "@/server/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/reset-password")({
+  validateSearch: z.object({ code: z.string().optional() }),
   head: () => ({
     meta: [
       { title: "Reset password · AI Invoice Saudi" },
@@ -18,17 +21,39 @@ export const Route = createFileRoute("/reset-password")({
 
 function Page() {
   const navigate = useNavigate();
+  const { code } = Route.useSearch();
+  const [ready, setReady] = useState(!code);
   const [p, setP] = useState("");
   const [c, setC] = useState("");
   const [err, setErr] = useState<string | null>(null);
-  const submit = (e: React.FormEvent) => {
+  const [loading, setLoading] = useState(false);
+
+  // The email link lands here with ?code=…; exchange it for a session before allowing the update.
+  useEffect(() => {
+    if (!code) return;
+    exchangeResetCode({ data: { code } }).then((res) => {
+      if (!res.ok) setErr("This reset link is invalid or has expired. Request a new one.");
+      setReady(true);
+      navigate({ to: "/reset-password", search: {}, replace: true });
+    });
+  }, [code, navigate]);
+
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
-    if (p.length < 6) return setErr("Password must be at least 6 characters");
+    if (p.length < 8) return setErr("Password must be at least 8 characters");
     if (p !== c) return setErr("Passwords do not match");
-    toast.success("Password updated");
-    navigate({ to: "/login" });
+    setLoading(true);
+    try {
+      const res = await updatePassword({ data: { password: p } });
+      if (!res.ok) return setErr(res.error);
+      toast.success("Password updated. Please sign in.");
+      navigate({ to: "/login" });
+    } finally {
+      setLoading(false);
+    }
   };
+
   return (
     <AuthShell
       title="Set a new password"
@@ -40,16 +65,30 @@ function Page() {
     >
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-1.5">
-          <Label>New password</Label>
-          <Input type="password" required value={p} onChange={(e) => setP(e.target.value)} />
+          <Label htmlFor="new">New password</Label>
+          <Input
+            id="new"
+            type="password"
+            autoComplete="new-password"
+            required
+            value={p}
+            onChange={(e) => setP(e.target.value)}
+          />
         </div>
         <div className="space-y-1.5">
-          <Label>Confirm password</Label>
-          <Input type="password" required value={c} onChange={(e) => setC(e.target.value)} />
+          <Label htmlFor="confirm">Confirm password</Label>
+          <Input
+            id="confirm"
+            type="password"
+            autoComplete="new-password"
+            required
+            value={c}
+            onChange={(e) => setC(e.target.value)}
+          />
         </div>
         {err && <p className="text-sm text-destructive">{err}</p>}
-        <Button type="submit" className="w-full">
-          Update password
+        <Button type="submit" className="w-full" disabled={loading || !ready}>
+          {loading ? "Updating…" : "Update password"}
         </Button>
       </form>
     </AuthShell>

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthShell } from "@/components/AuthShell";
-import { toast } from "sonner";
+import { requestPasswordReset } from "@/server/auth";
 
 export const Route = createFileRoute("/forgot-password")({
   head: () => ({
@@ -19,40 +19,48 @@ export const Route = createFileRoute("/forgot-password")({
 function Page() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
-  const submit = (e: React.FormEvent) => {
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSent(true);
-    toast.success("Reset link sent");
+    setLoading(true);
+    try {
+      await requestPasswordReset({ data: { email } });
+      setSent(true);
+    } finally {
+      setLoading(false);
+    }
   };
+
   return (
     <AuthShell
       title="Forgot password?"
       subtitle="Enter your email and we'll send a reset link"
       footer={
-        <>
-          <Link to="/login" className="text-primary font-medium">
-            Back to sign in
-          </Link>
-        </>
+        <Link to="/login" className="text-primary font-medium">
+          Back to sign in
+        </Link>
       }
     >
       {sent ? (
         <div className="rounded-lg border bg-secondary/40 p-4 text-sm">
-          A reset link has been sent to <b>{email}</b>. It expires in 1 hour.
-          <div className="mt-3">
-            <Link to="/reset-password" className="text-primary font-medium">
-              Open reset page (demo)
-            </Link>
-          </div>
+          If an account exists for <b>{email}</b>, a reset link is on its way. It expires in 1 hour.
         </div>
       ) : (
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Email</Label>
-            <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
-          <Button type="submit" className="w-full">
-            Send reset link
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Sending…" : "Send reset link"}
           </Button>
         </form>
       )}
