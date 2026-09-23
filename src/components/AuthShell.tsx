@@ -2,7 +2,17 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 
-export function AuthShell({ title, subtitle, children, footer }: { title: string; subtitle?: string; children: ReactNode; footer?: ReactNode }) {
+export function AuthShell({
+  title,
+  subtitle,
+  children,
+  footer,
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="flex flex-col justify-center px-6 py-10 sm:px-10">
@@ -31,12 +41,19 @@ export function AuthShell({ title, subtitle, children, footer }: { title: string
             Turn any document into a compliant Saudi invoice — instantly.
           </h2>
           <p className="mt-3 max-w-md text-sm text-primary-foreground/80">
-            Upload PDFs, images, or scans. Our AI extracts fields, verifies VAT at 15%, and generates a QR code your accountants can trust.
+            Upload PDFs, images, or scans. Our AI extracts fields, verifies VAT at 15%, and
+            generates a QR code your accountants can trust.
           </p>
         </div>
         <div className="grid gap-3 max-w-md">
-          {["AI-extracted fields with editable review", "VAT & totals validated to KSA rules", "Bilingual Arabic / English templates"].map((t) => (
-            <div key={t} className="rounded-xl bg-white/10 px-4 py-3 text-sm backdrop-blur">{t}</div>
+          {[
+            "AI-extracted fields with editable review",
+            "VAT & totals validated to KSA rules",
+            "Bilingual Arabic / English templates",
+          ].map((t) => (
+            <div key={t} className="rounded-xl bg-white/10 px-4 py-3 text-sm backdrop-blur">
+              {t}
+            </div>
           ))}
         </div>
       </div>

@@ -9,45 +9,34 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as VerifyEmailRouteImport } from './routes/verify-email'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as RegisterRouteImport } from './routes/register'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
-import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AppValidationRouteImport } from './routes/_app/validation'
-import { Route as AppUploadRouteImport } from './routes/_app/upload'
-import { Route as AppSettingsRouteImport } from './routes/_app/settings'
-import { Route as AppReportsRouteImport } from './routes/_app/reports'
-import { Route as AppQrScannerRouteImport } from './routes/_app/qr-scanner'
-import { Route as AppInvoicesRouteImport } from './routes/_app/invoices'
-import { Route as AppHelpRouteImport } from './routes/_app/help'
-import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
-import { Route as AppCustomersRouteImport } from './routes/_app/customers'
+import { Route as AppRouteImport } from './routes/_app'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as RegisterRouteImport } from './routes/register'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AppCompanyRouteImport } from './routes/_app/company'
+import { Route as AppCustomersRouteImport } from './routes/_app/customers'
+import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
+import { Route as AppHelpRouteImport } from './routes/_app/help'
+import { Route as AppInvoicesRouteImport } from './routes/_app/invoices'
+import { Route as AppQrScannerRouteImport } from './routes/_app/qr-scanner'
+import { Route as AppReportsRouteImport } from './routes/_app/reports'
+import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppUploadRouteImport } from './routes/_app/upload'
+import { Route as AppValidationRouteImport } from './routes/_app/validation'
 import { Route as AppInvoicesIndexRouteImport } from './routes/_app/invoices.index'
-import { Route as AppInvoicesNewRouteImport } from './routes/_app/invoices.new'
 import { Route as AppInvoicesIdRouteImport } from './routes/_app/invoices.$id'
+import { Route as AppInvoicesNewRouteImport } from './routes/_app/invoices.new'
 
-const VerifyEmailRoute = VerifyEmailRouteImport.update({
-  id: '/verify-email',
-  path: '/verify-email',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RegisterRoute = RegisterRouteImport.update({
-  id: '/register',
-  path: '/register',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
@@ -55,53 +44,29 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppRoute = AppRouteImport.update({
-  id: '/_app',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppValidationRoute = AppValidationRouteImport.update({
-  id: '/validation',
-  path: '/validation',
-  getParentRoute: () => AppRoute,
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AppUploadRoute = AppUploadRouteImport.update({
-  id: '/upload',
-  path: '/upload',
-  getParentRoute: () => AppRoute,
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AppSettingsRoute = AppSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppReportsRoute = AppReportsRouteImport.update({
-  id: '/reports',
-  path: '/reports',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppQrScannerRoute = AppQrScannerRouteImport.update({
-  id: '/qr-scanner',
-  path: '/qr-scanner',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppInvoicesRoute = AppInvoicesRouteImport.update({
-  id: '/invoices',
-  path: '/invoices',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppHelpRoute = AppHelpRouteImport.update({
-  id: '/help',
-  path: '/help',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppDashboardRoute = AppDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
+const AppCompanyRoute = AppCompanyRouteImport.update({
+  id: '/company',
+  path: '/company',
   getParentRoute: () => AppRoute,
 } as any)
 const AppCustomersRoute = AppCustomersRouteImport.update({
@@ -109,9 +74,44 @@ const AppCustomersRoute = AppCustomersRouteImport.update({
   path: '/customers',
   getParentRoute: () => AppRoute,
 } as any)
-const AppCompanyRoute = AppCompanyRouteImport.update({
-  id: '/company',
-  path: '/company',
+const AppDashboardRoute = AppDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppHelpRoute = AppHelpRouteImport.update({
+  id: '/help',
+  path: '/help',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppInvoicesRoute = AppInvoicesRouteImport.update({
+  id: '/invoices',
+  path: '/invoices',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppQrScannerRoute = AppQrScannerRouteImport.update({
+  id: '/qr-scanner',
+  path: '/qr-scanner',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppReportsRoute = AppReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppUploadRoute = AppUploadRouteImport.update({
+  id: '/upload',
+  path: '/upload',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppValidationRoute = AppValidationRouteImport.update({
+  id: '/validation',
+  path: '/validation',
   getParentRoute: () => AppRoute,
 } as any)
 const AppInvoicesIndexRoute = AppInvoicesIndexRouteImport.update({
@@ -119,14 +119,14 @@ const AppInvoicesIndexRoute = AppInvoicesIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppInvoicesRoute,
 } as any)
-const AppInvoicesNewRoute = AppInvoicesNewRouteImport.update({
-  id: '/new',
-  path: '/new',
-  getParentRoute: () => AppInvoicesRoute,
-} as any)
 const AppInvoicesIdRoute = AppInvoicesIdRouteImport.update({
   id: '/$id',
   path: '/$id',
+  getParentRoute: () => AppInvoicesRoute,
+} as any)
+const AppInvoicesNewRoute = AppInvoicesNewRouteImport.update({
+  id: '/new',
+  path: '/new',
   getParentRoute: () => AppInvoicesRoute,
 } as any)
 
@@ -272,39 +272,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/verify-email': {
-      id: '/verify-email'
-      path: '/verify-email'
-      fullPath: '/verify-email'
-      preLoaderRoute: typeof VerifyEmailRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/register': {
-      id: '/register'
-      path: '/register'
-      fullPath: '/register'
-      preLoaderRoute: typeof RegisterRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/forgot-password': {
-      id: '/forgot-password'
-      path: '/forgot-password'
-      fullPath: '/forgot-password'
-      preLoaderRoute: typeof ForgotPasswordRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app': {
@@ -314,67 +286,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_app/validation': {
-      id: '/_app/validation'
-      path: '/validation'
-      fullPath: '/validation'
-      preLoaderRoute: typeof AppValidationRouteImport
-      parentRoute: typeof AppRoute
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_app/upload': {
-      id: '/_app/upload'
-      path: '/upload'
-      fullPath: '/upload'
-      preLoaderRoute: typeof AppUploadRouteImport
-      parentRoute: typeof AppRoute
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_app/settings': {
-      id: '/_app/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof AppSettingsRouteImport
-      parentRoute: typeof AppRoute
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_app/reports': {
-      id: '/_app/reports'
-      path: '/reports'
-      fullPath: '/reports'
-      preLoaderRoute: typeof AppReportsRouteImport
-      parentRoute: typeof AppRoute
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_app/qr-scanner': {
-      id: '/_app/qr-scanner'
-      path: '/qr-scanner'
-      fullPath: '/qr-scanner'
-      preLoaderRoute: typeof AppQrScannerRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/invoices': {
-      id: '/_app/invoices'
-      path: '/invoices'
-      fullPath: '/invoices'
-      preLoaderRoute: typeof AppInvoicesRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/help': {
-      id: '/_app/help'
-      path: '/help'
-      fullPath: '/help'
-      preLoaderRoute: typeof AppHelpRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/dashboard': {
-      id: '/_app/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof AppDashboardRouteImport
+    '/_app/company': {
+      id: '/_app/company'
+      path: '/company'
+      fullPath: '/company'
+      preLoaderRoute: typeof AppCompanyRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/customers': {
@@ -384,11 +335,60 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCustomersRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/company': {
-      id: '/_app/company'
-      path: '/company'
-      fullPath: '/company'
-      preLoaderRoute: typeof AppCompanyRouteImport
+    '/_app/dashboard': {
+      id: '/_app/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/help': {
+      id: '/_app/help'
+      path: '/help'
+      fullPath: '/help'
+      preLoaderRoute: typeof AppHelpRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/invoices': {
+      id: '/_app/invoices'
+      path: '/invoices'
+      fullPath: '/invoices'
+      preLoaderRoute: typeof AppInvoicesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/qr-scanner': {
+      id: '/_app/qr-scanner'
+      path: '/qr-scanner'
+      fullPath: '/qr-scanner'
+      preLoaderRoute: typeof AppQrScannerRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/reports': {
+      id: '/_app/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof AppReportsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/settings': {
+      id: '/_app/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/upload': {
+      id: '/_app/upload'
+      path: '/upload'
+      fullPath: '/upload'
+      preLoaderRoute: typeof AppUploadRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/validation': {
+      id: '/_app/validation'
+      path: '/validation'
+      fullPath: '/validation'
+      preLoaderRoute: typeof AppValidationRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/invoices/': {
@@ -398,18 +398,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppInvoicesIndexRouteImport
       parentRoute: typeof AppInvoicesRoute
     }
-    '/_app/invoices/new': {
-      id: '/_app/invoices/new'
-      path: '/new'
-      fullPath: '/invoices/new'
-      preLoaderRoute: typeof AppInvoicesNewRouteImport
-      parentRoute: typeof AppInvoicesRoute
-    }
     '/_app/invoices/$id': {
       id: '/_app/invoices/$id'
       path: '/$id'
       fullPath: '/invoices/$id'
       preLoaderRoute: typeof AppInvoicesIdRouteImport
+      parentRoute: typeof AppInvoicesRoute
+    }
+    '/_app/invoices/new': {
+      id: '/_app/invoices/new'
+      path: '/new'
+      fullPath: '/invoices/new'
+      preLoaderRoute: typeof AppInvoicesNewRouteImport
       parentRoute: typeof AppInvoicesRoute
     }
   }
@@ -471,3 +471,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

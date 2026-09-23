@@ -6,3 +6,9 @@ pnpm-lock.yaml
 package-lock.json
 bun.lock
 routeTree.gen.ts
+node_modules
+.output
+.nitro
+.tanstack
+dist
+package-lock.json

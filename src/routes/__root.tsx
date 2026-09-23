@@ -6,11 +6,11 @@ import {
   useRouter,
   HeadContent,
   Scripts,
+  type ErrorComponentProps,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
@@ -35,11 +35,10 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
-  console.error(error);
+function ErrorComponent({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
   useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    console.error(error);
   }, [error]);
 
   return (
@@ -79,9 +78,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "AI Invoice Saudi — ZATCA-ready invoicing" },
-      { name: "description", content: "AI-powered invoice generation, validation and QR for Saudi Arabian businesses." },
+      {
+        name: "description",
+        content: "AI-powered invoice generation, validation and QR for Saudi Arabian businesses.",
+      },
       { property: "og:title", content: "AI Invoice Saudi" },
-      { property: "og:description", content: "AI-powered invoice generation, validation and QR for Saudi Arabian businesses." },
+      {
+        property: "og:description",
+        content: "AI-powered invoice generation, validation and QR for Saudi Arabian businesses.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -90,7 +95,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
+      },
     ],
   }),
   shellComponent: RootShell,
@@ -118,7 +126,6 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
       <Toaster position="top-right" richColors closeButton />
     </QueryClientProvider>

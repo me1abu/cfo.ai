@@ -8,7 +8,12 @@ import { login } from "@/lib/store";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/register")({
-  head: () => ({ meta: [{ title: "Create account · AI Invoice Saudi" }, { name: "description", content: "Create your AI Invoice workspace." }] }),
+  head: () => ({
+    meta: [
+      { title: "Create account · AI Invoice Saudi" },
+      { name: "description", content: "Create your AI Invoice workspace." },
+    ],
+  }),
   component: RegisterPage,
 });
 
@@ -26,16 +31,59 @@ function RegisterPage() {
     }, 600);
   };
   return (
-    <AuthShell title="Create your workspace" subtitle="Start invoicing in minutes"
-      footer={<>Already have an account? <Link to="/login" className="text-primary font-medium">Sign in</Link></>}>
+    <AuthShell
+      title="Create your workspace"
+      subtitle="Start invoicing in minutes"
+      footer={
+        <>
+          Already have an account?{" "}
+          <Link to="/login" className="text-primary font-medium">
+            Sign in
+          </Link>
+        </>
+      }
+    >
       <form onSubmit={submit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5"><Label>Full name</Label><Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-          <div className="space-y-1.5"><Label>Company</Label><Input required value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} /></div>
+          <div className="space-y-1.5">
+            <Label>Full name</Label>
+            <Input
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Company</Label>
+            <Input
+              required
+              value={form.company}
+              onChange={(e) => setForm({ ...form, company: e.target.value })}
+            />
+          </div>
         </div>
-        <div className="space-y-1.5"><Label>Email</Label><Input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-        <div className="space-y-1.5"><Label>Password</Label><Input type="password" minLength={6} required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
-        <Button type="submit" className="w-full" disabled={loading}>{loading ? "Creating…" : "Create account"}</Button>
+        <div className="space-y-1.5">
+          <Label>Email</Label>
+          <Input
+            type="email"
+            required
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label>Password</Label>
+          <Input
+            type="password"
+            minLength={6}
+            required
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+          />
+        </div>
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading ? "Creating…" : "Create account"}
+        </Button>
       </form>
     </AuthShell>
   );

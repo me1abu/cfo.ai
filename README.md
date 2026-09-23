@@ -1,29 +1,29 @@
-# Welcome to your Lovable project
+# AI Invoice Saudi
 
-This project was built with [Lovable](https://lovable.dev).
+AI-assisted, ZATCA-ready invoicing for Saudi businesses. Create tax invoices, generate Phase 1
+QR codes, validate against VAT rules, and extract invoice data from uploaded documents.
 
-## Build with Lovable
+## Stack
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
+- TanStack Start (React 19, SSR, file-based routes) + TypeScript
+- Tailwind 4 + shadcn/ui
+- Supabase (Postgres, Auth, Storage) via Drizzle
+- Claude (Anthropic SDK) called from server functions only
+- @react-pdf/renderer for PDFs, `qrcode` + `jsQR` for ZATCA QR
+- Resend for email
+- Vitest for tests, Vercel for hosting
 
 ## Development
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
-
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
+npm install
+cp .env.example .env   # then fill in the values
 npm run dev
 ```
 
-## Built with
+Scripts: `dev`, `build`, `preview`, `typecheck`, `lint`, `test`, `format`.
 
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
+## Deployment
+
+The build uses Nitro. Set `NITRO_PRESET=vercel` in Vercel's environment for a Vercel deployment;
+the default `node-server` preset produces a standalone Node server in `.output/`.

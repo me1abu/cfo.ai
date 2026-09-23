@@ -8,13 +8,25 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/qr-scanner")({
-  head: () => ({ meta: [{ title: "QR Scanner · AI Invoice Saudi" }, { name: "description", content: "Scan and decode ZATCA-style invoice QR codes." }] }),
+  head: () => ({
+    meta: [
+      { title: "QR Scanner · AI Invoice Saudi" },
+      { name: "description", content: "Scan and decode ZATCA-style invoice QR codes." },
+    ],
+  }),
   component: QrScanner,
 });
 
 function QrScanner() {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [decoded, setDecoded] = useState<null | { seller: string; vat: string; date: string; total: string; vatAmount: string; success: boolean }>(null);
+  const [decoded, setDecoded] = useState<null | {
+    seller: string;
+    vat: string;
+    date: string;
+    total: string;
+    vatAmount: string;
+    success: boolean;
+  }>(null);
   const [image, setImage] = useState<string | null>(null);
 
   const onFile = (f: File) => {
@@ -35,16 +47,31 @@ function QrScanner() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="QR Scanner" subtitle="Upload a QR image to decode the ZATCA invoice payload." />
+      <PageHeader
+        title="QR Scanner"
+        subtitle="Upload a QR image to decode the ZATCA invoice payload."
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="shadow-soft">
           <CardContent className="p-6 space-y-4">
-            <div className="rounded-2xl border-2 border-dashed p-10 text-center cursor-pointer hover:border-primary hover:bg-primary/5" onClick={() => inputRef.current?.click()}>
+            <div
+              className="rounded-2xl border-2 border-dashed p-10 text-center cursor-pointer hover:border-primary hover:bg-primary/5"
+              onClick={() => inputRef.current?.click()}
+            >
               <UploadCloud className="mx-auto h-10 w-10 text-primary" />
               <div className="mt-3 text-sm font-medium">Upload a QR image</div>
               <div className="text-xs text-muted-foreground">PNG or JPG</div>
-              <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
+              <input
+                ref={inputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onFile(f);
+                }}
+              />
             </div>
             {image ? (
               <div className="grid place-items-center">
@@ -84,7 +111,15 @@ function QrScanner() {
                     </div>
                   ))}
                 </dl>
-                <Button variant="outline" onClick={() => { setDecoded(null); setImage(null); }}>Scan another</Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDecoded(null);
+                    setImage(null);
+                  }}
+                >
+                  Scan another
+                </Button>
               </div>
             ) : (
               <div className="grid place-items-center rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">

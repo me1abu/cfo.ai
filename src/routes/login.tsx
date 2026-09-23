@@ -9,7 +9,12 @@ import { login } from "@/lib/store";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
-  head: () => ({ meta: [{ title: "Sign in · AI Invoice Saudi" }, { name: "description", content: "Sign in to AI Invoice Saudi." }] }),
+  head: () => ({
+    meta: [
+      { title: "Sign in · AI Invoice Saudi" },
+      { name: "description", content: "Sign in to AI Invoice Saudi." },
+    ],
+  }),
   component: LoginPage,
 });
 
@@ -35,23 +40,49 @@ function LoginPage() {
   };
 
   return (
-    <AuthShell title="Welcome back" subtitle="Sign in to your AI Invoice workspace"
-      footer={<>Don't have an account? <Link to="/register" className="text-primary font-medium">Create one</Link></>}>
+    <AuthShell
+      title="Welcome back"
+      subtitle="Sign in to your AI Invoice workspace"
+      footer={
+        <>
+          Don't have an account?{" "}
+          <Link to="/register" className="text-primary font-medium">
+            Create one
+          </Link>
+        </>
+      }
+    >
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <Input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
         </div>
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <Label htmlFor="password">Password</Label>
-            <Link to="/forgot-password" className="text-xs text-primary">Forgot password?</Link>
+            <Link to="/forgot-password" className="text-xs text-primary">
+              Forgot password?
+            </Link>
           </div>
-          <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <Input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
         </div>
         <div className="flex items-center gap-2">
           <Checkbox id="remember" checked={remember} onCheckedChange={(v) => setRemember(!!v)} />
-          <Label htmlFor="remember" className="text-sm font-normal">Remember me on this device</Label>
+          <Label htmlFor="remember" className="text-sm font-normal">
+            Remember me on this device
+          </Label>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <Button type="submit" className="w-full" disabled={loading}>
