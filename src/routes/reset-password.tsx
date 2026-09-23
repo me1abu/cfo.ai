@@ -5,11 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthShell } from "@/components/AuthShell";
-import { exchangeAuthCode, updatePassword } from "@/server/auth";
+import { exchangeAuthCode, updatePassword, verifyTokenHash } from "@/server/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/reset-password")({
-  validateSearch: z.object({ code: z.string().optional() }),
+  validateSearch: z.object({
+    code: z.string().optional(),
+    token_hash: z.string().optional(),
+    type: z.enum(["recovery", "email"]).optional(),
+  }),
   head: () => ({
     meta: [
       { title: "Reset password · AI Invoice Saudi" },
@@ -21,22 +25,34 @@ export const Route = createFileRoute("/reset-password")({
 
 function Page() {
   const navigate = useNavigate();
-  const { code } = Route.useSearch();
-  const [ready, setReady] = useState(!code);
+  const { code, token_hash, type } = Route.useSearch();
+  const hasToken = Boolean(code || token_hash);
+  const [ready, setReady] = useState(!hasToken);
   const [p, setP] = useState("");
   const [c, setC] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // The email link lands here with ?code=…; exchange it for a session before allowing the update.
+  // The email link lands here with a token; turn it into a session before allowing the update.
   useEffect(() => {
-    if (!code) return;
-    exchangeAuthCode({ data: { code } }).then((res) => {
-      if (!res.ok) setErr("This reset link is invalid or has expired. Request a new one.");
+    if (!hasToken) return;
+    const run = async () => {
+      const res = token_hash
+        ? await verifyTokenHash({ data: { tokenHash: token_hash, type: type ?? "recovery" } })
+        : await exchangeAuthCode({ data: { code: code! } });
+      if (!res.ok) {
+        setErr(
+          "reason" in res && res.reason === "verifier_missing"
+            ? "This reset link must be opened in the same browser where you requested it. Request a new link from that browser, or ask us to switch to browser-independent links."
+            : "This reset link is invalid or has expired. Request a new one.",
+        );
+      }
       setReady(true);
       navigate({ to: "/reset-password", search: {}, replace: true });
-    });
-  }, [code, navigate]);
+    };
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasToken]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

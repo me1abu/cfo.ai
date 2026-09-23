@@ -25,10 +25,32 @@ export const getSessionUser = createServerFn({ method: "GET" }).handler(
     } = await supabase.auth.getUser();
     if (!user) return null;
 
-    const profile = await db.query.profiles.findFirst({
+    let profile = await db.query.profiles.findFirst({
       where: eq(schema.profiles.id, user.id),
     });
-    if (!profile) return null;
+    // Users created by invite/admin, or whose sign-up transaction failed after the auth
+    // user was created, have no workspace yet. Create one from their sign-up metadata.
+    if (!profile) {
+      const meta = (user.user_metadata ?? {}) as { full_name?: string; company?: string };
+      profile = await db.transaction(async (tx) => {
+        const [org] = await tx
+          .insert(schema.organizations)
+          .values({ name: meta.company?.trim() || "My company" })
+          .returning({ id: schema.organizations.id });
+        const [created] = await tx
+          .insert(schema.profiles)
+          .values({
+            id: user.id,
+            orgId: org.id,
+            email: user.email ?? "",
+            fullName: meta.full_name?.trim() ?? "",
+          })
+          .onConflictDoNothing()
+          .returning();
+        return created;
+      });
+      if (!profile) return null;
+    }
 
     return {
       id: user.id,
@@ -127,6 +149,37 @@ export const exchangeAuthCode = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const supabase = getSupabaseServerClient();
     const { error } = await supabase.auth.exchangeCodeForSession(data.code);
+    if (error) {
+      // Supabase only issues `code` after it has verified the email token, so this
+      // specific failure means the link was opened in a browser that did not start
+      // the flow (no PKCE verifier cookie). The email itself is already confirmed.
+      const verifierMissing = error.code === "pkce_code_verifier_not_found";
+      return {
+        ok: false as const,
+        reason: verifierMissing ? ("verifier_missing" as const) : ("invalid" as const),
+        error: friendlyAuthError(error.message),
+      };
+    }
+    return { ok: true as const };
+  });
+
+/**
+ * Browser-independent verification. Used when the email template links with
+ * `token_hash` + `type` (Supabase's recommended SSR pattern) instead of a PKCE code.
+ */
+export const verifyTokenHash = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      tokenHash: z.string().min(1),
+      type: z.enum(["signup", "email", "recovery", "email_change", "invite", "magiclink"]),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const supabase = getSupabaseServerClient();
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash: data.tokenHash,
+      type: data.type,
+    });
     if (error) return { ok: false as const, error: friendlyAuthError(error.message) };
     return { ok: true as const };
   });
