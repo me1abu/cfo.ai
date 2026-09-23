@@ -10,11 +10,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useStore } from "@/lib/store";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { invoicesQuery } from "@/lib/queries";
 import { UploadCloud, CheckCircle2, AlertTriangle, XCircle, ShieldCheck } from "lucide-react";
 import { useState, useRef } from "react";
 
 export const Route = createFileRoute("/_app/validation")({
+  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(invoicesQuery()),
   head: () => ({
     meta: [
       { title: "Invoice Validation · AI Invoice Saudi" },
@@ -31,7 +33,7 @@ interface Check {
 }
 
 function Validation() {
-  const invoices = useStore((s) => s.invoices);
+  const { data: invoices } = useSuspenseQuery(invoicesQuery());
   const [source, setSource] = useState<"upload" | "existing">("existing");
   const [selectedId, setSelectedId] = useState(invoices[0]?.id ?? "");
   const [running, setRunning] = useState(false);

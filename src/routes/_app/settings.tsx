@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,11 +14,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useStore, updateSettings, type Settings } from "@/lib/store";
+import type { UserSettings } from "@/lib/invoice-math";
+import { settingsQuery } from "@/lib/queries";
+import { updateSettings } from "@/server/profile";
+import { updatePassword } from "@/server/auth";
 import { useState } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/settings")({
+  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(settingsQuery()),
   head: () => ({
     meta: [
       { title: "Settings · AI Invoice Saudi" },
@@ -28,14 +33,28 @@ export const Route = createFileRoute("/_app/settings")({
 });
 
 function SettingsPage() {
-  const settings = useStore((s) => s.settings);
-  const user = useStore((s) => s.auth.user);
-  const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
+  const { data: settings } = useSuspenseQuery(settingsQuery());
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  const [pw, setPw] = useState({ next: "", confirm: "" });
+  const [fullName, setFullName] = useState(settings.fullName);
 
-  const changePw = () => {
-    if (pw.next.length < 6) return toast.error("Password must be at least 6 characters");
+  const patch = useMutation({
+    mutationFn: (data: Partial<Omit<UserSettings, "email">>) => updateSettings({ data }),
+    onSuccess: async (saved, vars) => {
+      queryClient.setQueryData(settingsQuery().queryKey, saved);
+      if (vars.fullName !== undefined) await router.invalidate(); // header shows the name
+      toast.success("Settings saved");
+    },
+    onError: () => toast.error("Could not save settings"),
+  });
+
+  const changePw = async () => {
+    if (pw.next.length < 8) return toast.error("Password must be at least 8 characters");
     if (pw.next !== pw.confirm) return toast.error("Passwords do not match");
-    setPw({ current: "", next: "", confirm: "" });
+    const res = await updatePassword({ data: { password: pw.next } });
+    if (!res.ok) return toast.error(res.error);
+    setPw({ next: "", confirm: "" });
     toast.success("Password updated");
   };
 
@@ -61,10 +80,7 @@ function SettingsPage() {
                 <Label>Language</Label>
                 <Select
                   value={settings.language}
-                  onValueChange={(v) => {
-                    updateSettings({ language: v as Settings["language"] });
-                    toast.success("Language updated");
-                  }}
+                  onValueChange={(v) => patch.mutate({ language: v as UserSettings["language"] })}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -79,10 +95,7 @@ function SettingsPage() {
                 <Label>Theme</Label>
                 <Select
                   value={settings.theme}
-                  onValueChange={(v) => {
-                    updateSettings({ theme: v as Settings["theme"] });
-                    toast.success("Theme updated");
-                  }}
+                  onValueChange={(v) => patch.mutate({ theme: v as UserSettings["theme"] })}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -107,13 +120,13 @@ function SettingsPage() {
                 label="Email notifications"
                 desc="Receive invoice updates and payment reminders"
                 checked={settings.emailNotifs}
-                onChange={(v) => updateSettings({ emailNotifs: v })}
+                onChange={(v) => patch.mutate({ emailNotifs: v })}
               />
               <Row
                 label="SMS notifications"
                 desc="Text alerts for overdue invoices"
                 checked={settings.smsNotifs}
-                onChange={(v) => updateSettings({ smsNotifs: v })}
+                onChange={(v) => patch.mutate({ smsNotifs: v })}
               />
             </CardContent>
           </Card>
@@ -122,35 +135,14 @@ function SettingsPage() {
         <TabsContent value="security" className="mt-4 space-y-6">
           <Card className="shadow-soft">
             <CardHeader>
-              <CardTitle className="text-base">Two-factor authentication</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Row
-                label="Require 2FA on sign in"
-                desc="Adds an extra verification step"
-                checked={settings.twoFactor}
-                onChange={(v) => updateSettings({ twoFactor: v })}
-              />
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-soft">
-            <CardHeader>
               <CardTitle className="text-base">Change password</CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-3">
+            <CardContent className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>Current</Label>
+                <Label>New password</Label>
                 <Input
                   type="password"
-                  value={pw.current}
-                  onChange={(e) => setPw({ ...pw, current: e.target.value })}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>New</Label>
-                <Input
-                  type="password"
+                  autoComplete="new-password"
                   value={pw.next}
                   onChange={(e) => setPw({ ...pw, next: e.target.value })}
                 />
@@ -159,11 +151,12 @@ function SettingsPage() {
                 <Label>Confirm</Label>
                 <Input
                   type="password"
+                  autoComplete="new-password"
                   value={pw.confirm}
                   onChange={(e) => setPw({ ...pw, confirm: e.target.value })}
                 />
               </div>
-              <div className="sm:col-span-3">
+              <div className="sm:col-span-2">
                 <Button onClick={changePw}>Update password</Button>
               </div>
             </CardContent>
@@ -178,14 +171,22 @@ function SettingsPage() {
             <CardContent className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Full name</Label>
-                <Input defaultValue={user?.name ?? ""} />
+                <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
               </div>
               <div className="space-y-1.5">
                 <Label>Email</Label>
-                <Input defaultValue={user?.email ?? ""} />
+                <Input value={settings.email} disabled />
               </div>
               <div className="sm:col-span-2">
-                <Button onClick={() => toast.success("Profile saved")}>Save profile</Button>
+                <Button
+                  onClick={() => {
+                    if (!fullName.trim()) return toast.error("Name is required");
+                    patch.mutate({ fullName: fullName.trim() });
+                  }}
+                  disabled={patch.isPending}
+                >
+                  Save profile
+                </Button>
               </div>
             </CardContent>
           </Card>

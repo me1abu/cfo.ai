@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -32,12 +32,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useStore, upsertCustomer, deleteCustomer, type Customer } from "@/lib/store";
+import type { Customer } from "@/lib/invoice-math";
+import { customersQuery } from "@/lib/queries";
+import { deleteCustomer, saveCustomer } from "@/server/customers";
 import { Plus, Search, Pencil, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/customers")({
+  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(customersQuery()),
   head: () => ({
     meta: [
       { title: "Customers · AI Invoice Saudi" },
@@ -49,7 +52,7 @@ export const Route = createFileRoute("/_app/customers")({
 
 function empty(): Customer {
   return {
-    id: `c_${Date.now()}`,
+    id: "",
     name: "",
     vatNumber: "",
     crNumber: "",
@@ -61,10 +64,33 @@ function empty(): Customer {
 }
 
 function Customers() {
-  const customers = useStore((s) => s.customers);
+  const { data: customers } = useSuspenseQuery(customersQuery());
+  const queryClient = useQueryClient();
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<Customer | null>(null);
   const [open, setOpen] = useState(false);
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["customers"] });
+
+  const save = useMutation({
+    mutationFn: (c: Customer) => saveCustomer({ data: { ...c, id: c.id || undefined } }),
+    onSuccess: async () => {
+      await invalidate();
+      toast.success("Customer saved");
+      setOpen(false);
+      setEditing(null);
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not save customer"),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => deleteCustomer({ data: { id } }),
+    onSuccess: async () => {
+      await invalidate();
+      toast.success("Customer deleted");
+    },
+    onError: () => toast.error("Could not delete customer"),
+  });
 
   const filtered = useMemo(
     () =>
@@ -74,20 +100,17 @@ function Customers() {
     [customers, q],
   );
 
-  const save = () => {
+  const submit = () => {
     if (!editing) return;
     if (!editing.name.trim()) return toast.error("Name is required");
-    upsertCustomer(editing);
-    toast.success("Customer saved");
-    setOpen(false);
-    setEditing(null);
+    save.mutate(editing);
   };
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Customers"
-        subtitle={`${customers.length} companies in your address book`}
+        subtitle={`${customers.length} compan${customers.length === 1 ? "y" : "ies"} in your address book`}
         actions={
           <Button
             onClick={() => {
@@ -133,7 +156,7 @@ function Customers() {
                     colSpan={5}
                     className="py-12 text-center text-sm text-muted-foreground"
                   >
-                    No customers.
+                    {customers.length === 0 ? "No customers yet." : "No customers match."}
                   </TableCell>
                 </TableRow>
               )}
@@ -176,12 +199,7 @@ function Customers() {
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => {
-                                deleteCustomer(c.id);
-                                toast.success("Customer deleted");
-                              }}
-                            >
+                            <AlertDialogAction onClick={() => remove.mutate(c.id)}>
                               Delete
                             </AlertDialogAction>
                           </AlertDialogFooter>
@@ -199,11 +217,7 @@ function Customers() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>
-              {editing && customers.find((c) => c.id === editing.id)
-                ? "Edit customer"
-                : "Add customer"}
-            </DialogTitle>
+            <DialogTitle>{editing?.id ? "Edit customer" : "Add customer"}</DialogTitle>
           </DialogHeader>
           {editing && (
             <div className="grid gap-3 sm:grid-cols-2">
@@ -253,7 +267,7 @@ function Customers() {
               <div className="space-y-1.5 sm:col-span-2">
                 <Label>Notes</Label>
                 <Textarea
-                  value={editing.notes ?? ""}
+                  value={editing.notes}
                   onChange={(e) => setEditing({ ...editing, notes: e.target.value })}
                 />
               </div>
@@ -263,7 +277,9 @@ function Customers() {
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={save}>Save</Button>
+            <Button onClick={submit} disabled={save.isPending}>
+              {save.isPending ? "Saving…" : "Save"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useStore, formatMoney, computeTotals } from "@/lib/store";
+import { formatMoney, computeTotals, monthlySeries } from "@/lib/invoice-math";
+import { invoicesQuery } from "@/lib/queries";
 import {
   BarChart,
   Bar,
@@ -18,6 +20,7 @@ import { FileDown } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/reports")({
+  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(invoicesQuery()),
   head: () => ({
     meta: [
       { title: "Reports · AI Invoice Saudi" },
@@ -28,22 +31,52 @@ export const Route = createFileRoute("/_app/reports")({
 });
 
 function Reports() {
-  const invoices = useStore((s) => s.invoices);
-
-  const monthlyRevenue = ["Jun", "Jul", "Aug", "Sep", "Oct", "Nov"].map((m, i) => ({
-    month: m,
-    revenue: [42000, 51000, 47500, 63000, 88000, 72500][i],
-    vat: [6300, 7650, 7125, 9450, 13200, 10875][i],
-  }));
+  const { data: invoices } = useSuspenseQuery(invoicesQuery());
+  const monthlyRevenue = monthlySeries(invoices);
 
   const byCustomer = invoices.reduce<Record<string, number>>((acc, inv) => {
+    if (inv.status === "draft") return acc;
     const t = computeTotals(inv.items).total;
     acc[inv.customerName] = (acc[inv.customerName] ?? 0) + t;
     return acc;
   }, {});
   const customerRows = Object.entries(byCustomer).sort((a, b) => b[1] - a[1]);
 
-  const exportAs = (format: string) => toast.success(`${format.toUpperCase()} exported (demo)`);
+  const exportCsv = () => {
+    const header = [
+      "Number",
+      "Customer",
+      "Date",
+      "Due",
+      "Status",
+      "Currency",
+      "Subtotal",
+      "VAT",
+      "Total",
+    ];
+    const lines = invoices.map((i) => {
+      const t = computeTotals(i.items);
+      return [
+        i.number,
+        i.customerName,
+        i.date,
+        i.dueDate,
+        i.status,
+        i.currency,
+        t.subtotal,
+        t.vat,
+        t.total,
+      ]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",");
+    });
+    const blob = new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `invoices-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
 
   return (
     <div className="space-y-6">
@@ -52,13 +85,13 @@ function Reports() {
         subtitle="Financial insights and VAT breakdowns"
         actions={
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => exportAs("pdf")}>
+            <Button variant="outline" onClick={() => toast.info("PDF export arrives in Phase 2")}>
               <FileDown className="mr-1 h-4 w-4" /> PDF
             </Button>
-            <Button variant="outline" onClick={() => exportAs("excel")}>
+            <Button variant="outline" onClick={() => toast.info("Excel export arrives in Phase 4")}>
               <FileDown className="mr-1 h-4 w-4" /> Excel
             </Button>
-            <Button variant="outline" onClick={() => exportAs("csv")}>
+            <Button variant="outline" onClick={exportCsv}>
               <FileDown className="mr-1 h-4 w-4" /> CSV
             </Button>
           </div>
@@ -76,7 +109,7 @@ function Reports() {
         <TabsContent value="revenue" className="mt-4">
           <Card className="shadow-soft">
             <CardHeader>
-              <CardTitle className="text-base">Monthly revenue (SAR)</CardTitle>
+              <CardTitle className="text-base">Monthly revenue (SAR, last 6 months)</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="h-80">
@@ -143,6 +176,13 @@ function Reports() {
                   </tr>
                 </thead>
                 <tbody>
+                  {invoices.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="p-8 text-center text-muted-foreground">
+                        No invoices yet.
+                      </td>
+                    </tr>
+                  )}
                   {invoices.map((i) => {
                     const t = computeTotals(i.items);
                     return (
@@ -171,6 +211,13 @@ function Reports() {
                   </tr>
                 </thead>
                 <tbody>
+                  {customerRows.length === 0 && (
+                    <tr>
+                      <td colSpan={2} className="p-8 text-center text-muted-foreground">
+                        No billed invoices yet.
+                      </td>
+                    </tr>
+                  )}
                   {customerRows.map(([name, total]) => (
                     <tr key={name} className="border-t">
                       <td className="p-3 font-medium">{name}</td>

@@ -1,4 +1,5 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,12 +37,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useStore, formatMoney, computeTotals, deleteInvoice } from "@/lib/store";
+import { formatMoney, computeTotals } from "@/lib/invoice-math";
+import { invoicesQuery } from "@/lib/queries";
+import { deleteInvoice } from "@/server/invoices";
 import { Plus, Search, MoreHorizontal, ArrowUpDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/invoices/")({
+  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(invoicesQuery()),
   head: () => ({
     meta: [
       { title: "Invoices · AI Invoice Saudi" },
@@ -51,7 +55,7 @@ export const Route = createFileRoute("/_app/invoices/")({
   component: Invoices,
 });
 
-const statusColors: Record<string, string> = {
+export const statusColors: Record<string, string> = {
   paid: "bg-success/15 text-success border-success/30",
   unpaid: "bg-warning/20 text-warning-foreground border-warning/40",
   draft: "bg-muted text-muted-foreground border-border",
@@ -59,29 +63,38 @@ const statusColors: Record<string, string> = {
 };
 
 function Invoices() {
-  const invoices = useStore((s) => s.invoices);
+  const { data: invoices } = useSuspenseQuery(invoicesQuery());
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
   const [sort, setSort] = useState<"date" | "amount" | "number">("date");
   const [dir, setDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
-  const per = 6;
+  const per = 10;
+
+  const remove = useMutation({
+    mutationFn: (id: string) => deleteInvoice({ data: { id } }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      toast.success("Invoice deleted");
+    },
+    onError: () => toast.error("Could not delete invoice"),
+  });
 
   const filtered = useMemo(() => {
-    let list = invoices.filter(
+    const list = invoices.filter(
       (i) =>
         (status === "all" || i.status === status) &&
         (q === "" || `${i.number} ${i.customerName}`.toLowerCase().includes(q.toLowerCase())),
     );
-    list = list.sort((a, b) => {
+    return [...list].sort((a, b) => {
       let x = 0;
       if (sort === "date") x = a.date.localeCompare(b.date);
       else if (sort === "number") x = a.number.localeCompare(b.number);
       else x = computeTotals(a.items).total - computeTotals(b.items).total;
       return dir === "asc" ? x : -x;
     });
-    return list;
   }, [invoices, q, status, sort, dir]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / per));
@@ -91,7 +104,7 @@ function Invoices() {
     <div className="space-y-6">
       <PageHeader
         title="Invoices"
-        subtitle={`${invoices.length} invoices in workspace`}
+        subtitle={`${invoices.length} invoice${invoices.length === 1 ? "" : "s"} in workspace`}
         actions={
           <Button onClick={() => navigate({ to: "/invoices/new" })}>
             <Plus className="mr-1 h-4 w-4" /> New invoice
@@ -174,7 +187,9 @@ function Invoices() {
                     colSpan={7}
                     className="py-12 text-center text-sm text-muted-foreground"
                   >
-                    No invoices match your filters.
+                    {invoices.length === 0
+                      ? "No invoices yet. Create your first one."
+                      : "No invoices match your filters."}
                   </TableCell>
                 </TableRow>
               )}
@@ -237,12 +252,7 @@ function Invoices() {
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => {
-                                    deleteInvoice(i.id);
-                                    toast.success("Invoice deleted");
-                                  }}
-                                >
+                                <AlertDialogAction onClick={() => remove.mutate(i.id)}>
                                   Delete
                                 </AlertDialogAction>
                               </AlertDialogFooter>

@@ -1,16 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useStore, updateCompany } from "@/lib/store";
+import { companyQuery } from "@/lib/queries";
+import { updateCompany } from "@/server/company";
 import { Building2, Save } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/company")({
+  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(companyQuery()),
   head: () => ({
     meta: [
       { title: "Company Profile · AI Invoice Saudi" },
@@ -21,13 +24,18 @@ export const Route = createFileRoute("/_app/company")({
 });
 
 function CompanyPage() {
-  const company = useStore((s) => s.company);
+  const { data: company } = useSuspenseQuery(companyQuery());
+  const queryClient = useQueryClient();
   const [form, setForm] = useState(company);
 
-  const save = () => {
-    updateCompany(form);
-    toast.success("Company profile saved — invoices will use these details");
-  };
+  const save = useMutation({
+    mutationFn: () => updateCompany({ data: form }),
+    onSuccess: async (saved) => {
+      queryClient.setQueryData(companyQuery().queryKey, saved);
+      toast.success("Company profile saved — invoices will use these details");
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not save"),
+  });
 
   return (
     <div className="space-y-6">
@@ -35,8 +43,8 @@ function CompanyPage() {
         title="Company profile"
         subtitle="These details appear on every invoice you generate."
         actions={
-          <Button onClick={save}>
-            <Save className="mr-1 h-4 w-4" /> Save changes
+          <Button onClick={() => save.mutate()} disabled={save.isPending}>
+            <Save className="mr-1 h-4 w-4" /> {save.isPending ? "Saving…" : "Save changes"}
           </Button>
         }
       />
@@ -82,6 +90,7 @@ function CompanyPage() {
               <Input
                 value={form.vatNumber}
                 onChange={(e) => setForm({ ...form, vatNumber: e.target.value })}
+                placeholder="15 digits, starts and ends with 3"
               />
             </div>
             <div className="space-y-1.5">
@@ -131,13 +140,16 @@ function CompanyPage() {
               <Label>Default currency</Label>
               <Input
                 value={form.currency}
-                onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                maxLength={3}
+                onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })}
               />
             </div>
             <div className="space-y-1.5">
               <Label>Default VAT rate (%)</Label>
               <Input
                 type="number"
+                min={0}
+                max={100}
                 value={form.vatRate}
                 onChange={(e) => setForm({ ...form, vatRate: +e.target.value })}
               />

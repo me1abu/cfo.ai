@@ -1,4 +1,5 @@
-import { createFileRoute, useNavigate, Link, useParams } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,20 +18,21 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { QrPreview } from "@/components/QrPreview";
 import {
-  useStore,
-  upsertInvoice,
   computeTotals,
-  nextInvoiceNumber,
   formatMoney,
+  lineSubtotal,
+  nextInvoiceNumber,
+  plusDaysISO,
+  todayISO,
   type Invoice,
   type InvoiceItem,
-} from "@/lib/store";
+} from "@/lib/invoice-math";
+import { companyQuery, customersQuery, invoicesQuery } from "@/lib/queries";
+import { saveInvoice } from "@/server/invoices";
 import {
   Trash2,
   Plus,
@@ -47,45 +49,66 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/invoices/new")({
+  loader: async ({ context: { queryClient } }) => {
+    await Promise.all([
+      queryClient.ensureQueryData(companyQuery()),
+      queryClient.ensureQueryData(customersQuery()),
+      queryClient.ensureQueryData(invoicesQuery()),
+    ]);
+  },
   head: () => ({
     meta: [
       { title: "New invoice · AI Invoice Saudi" },
       { name: "description", content: "Create a new invoice." },
     ],
   }),
-  component: () => <InvoiceEditor mode="new" />,
+  component: NewInvoice,
 });
 
-export function InvoiceEditor({ mode, id }: { mode: "new" | "edit"; id?: string }) {
-  const store = useStore((s) => s);
-  const navigate = useNavigate();
-  const existing = mode === "edit" ? store.invoices.find((i) => i.id === id) : undefined;
-  const [inv, setInv] = useState<Invoice>(
-    () =>
-      existing ?? {
-        id: `inv_${Date.now()}`,
-        number: nextInvoiceNumber(store.invoices),
-        date: new Date().toISOString().slice(0, 10),
-        dueDate: new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10),
-        customerId: "",
-        customerName: "",
-        customerVat: "",
-        customerAddress: "",
-        currency: store.company.currency,
-        items: [
-          {
-            id: `it_${Date.now()}`,
-            description: "",
-            quantity: 1,
-            unitPrice: 0,
-            discount: 0,
-            vatRate: store.company.vatRate,
-          },
-        ],
-        status: "draft",
-        template: "modern",
-      },
+function NewInvoice() {
+  const { data: company } = useSuspenseQuery(companyQuery());
+  const { data: invoices } = useSuspenseQuery(invoicesQuery());
+  const initial = useMemo<Invoice>(
+    () => ({
+      id: "",
+      number: nextInvoiceNumber(invoices),
+      date: todayISO(),
+      dueDate: plusDaysISO(30),
+      customerId: null,
+      customerName: "",
+      customerVat: "",
+      customerAddress: "",
+      currency: company.currency,
+      items: [newItem(company.vatRate)],
+      status: "draft",
+      notes: "",
+      template: "modern",
+    }),
+    // Only compute once for the new-invoice form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
   );
+  return <InvoiceEditor mode="new" initial={initial} />;
+}
+
+let tmpCounter = 0;
+function newItem(vatRate: number): InvoiceItem {
+  return {
+    id: `tmp_${++tmpCounter}_${Date.now()}`,
+    description: "",
+    quantity: 1,
+    unitPrice: 0,
+    discount: 0,
+    vatRate,
+  };
+}
+
+export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial: Invoice }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { data: company } = useSuspenseQuery(companyQuery());
+  const { data: customers } = useSuspenseQuery(customersQuery());
+  const [inv, setInv] = useState<Invoice>(initial);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
 
@@ -98,34 +121,37 @@ export function InvoiceEditor({ mode, id }: { mode: "new" | "edit"; id?: string 
       items: prev.items.map((it, i) => (i === idx ? { ...it, ...patch } : it)),
     }));
   const addItem = () =>
-    setInv((prev) => ({
-      ...prev,
-      items: [
-        ...prev.items,
-        {
-          id: `it_${Date.now()}`,
-          description: "",
-          quantity: 1,
-          unitPrice: 0,
-          discount: 0,
-          vatRate: store.company.vatRate,
-        },
-      ],
-    }));
+    setInv((prev) => ({ ...prev, items: [...prev.items, newItem(company.vatRate)] }));
   const removeItem = (idx: number) =>
     setInv((prev) => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) }));
+
+  const mutation = useMutation({
+    mutationFn: (toSave: Invoice) =>
+      saveInvoice({
+        data: {
+          ...toSave,
+          id: toSave.id || undefined,
+          items: toSave.items.map(({ id: _id, ...rest }) => rest),
+        },
+      }),
+    onSuccess: async (res, toSave) => {
+      if (!res.ok) return toast.error(res.error);
+      await queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      toast.success(mode === "new" ? "Invoice created" : "Invoice saved");
+      if (mode === "new") navigate({ to: "/invoices/$id", params: { id: res.id } });
+      else setInv(toSave);
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Could not save invoice"),
+  });
 
   const save = (status?: Invoice["status"]) => {
     if (!inv.customerName.trim()) return toast.error("Customer name is required");
     if (inv.items.every((i) => !i.description.trim())) return toast.error("Add at least one item");
-    const toSave = status ? { ...inv, status } : inv;
-    upsertInvoice(toSave);
-    toast.success(mode === "new" ? "Invoice created" : "Invoice saved");
-    navigate({ to: "/invoices/$id", params: { id: toSave.id } });
+    mutation.mutate(status ? { ...inv, status } : inv);
   };
 
   const pickCustomer = (id: string) => {
-    const c = store.customers.find((x) => x.id === id);
+    const c = customers.find((x) => x.id === id);
     if (c)
       update({
         customerId: c.id,
@@ -135,7 +161,8 @@ export function InvoiceEditor({ mode, id }: { mode: "new" | "edit"; id?: string 
       });
   };
 
-  const qrValue = `Seller:${store.company.name}|VAT:${store.company.vatNumber}|Date:${inv.date}|Total:${totals.total.toFixed(2)}|VAT:${totals.vat.toFixed(2)}`;
+  const qrValue = `Seller:${company.name}|VAT:${company.vatNumber}|Date:${inv.date}|Total:${totals.total.toFixed(2)}|VAT:${totals.vat.toFixed(2)}`;
+  const busy = mutation.isPending;
 
   return (
     <div className="space-y-6">
@@ -149,7 +176,7 @@ export function InvoiceEditor({ mode, id }: { mode: "new" | "edit"; id?: string 
                 <ArrowLeft className="mr-1 h-4 w-4" /> Back
               </Link>
             </Button>
-            <Button variant="outline" onClick={() => save("draft")}>
+            <Button variant="outline" onClick={() => save("draft")} disabled={busy}>
               <Save className="mr-1 h-4 w-4" /> Save draft
             </Button>
             <Button variant="outline" onClick={() => setPreviewOpen(true)}>
@@ -158,15 +185,12 @@ export function InvoiceEditor({ mode, id }: { mode: "new" | "edit"; id?: string 
             <Button variant="outline" onClick={() => setQrOpen(true)}>
               <QrCode className="mr-1 h-4 w-4" /> Generate QR
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                toast.success("PDF generated (demo)");
-              }}
-            >
+            <Button variant="outline" onClick={() => toast.info("PDF export arrives in Phase 2")}>
               <FileDown className="mr-1 h-4 w-4" /> Generate PDF
             </Button>
-            <Button onClick={() => save("unpaid")}>Save & finalize</Button>
+            <Button onClick={() => save("unpaid")} disabled={busy}>
+              {busy ? "Saving…" : "Save & finalize"}
+            </Button>
           </div>
         }
       />
@@ -259,12 +283,18 @@ export function InvoiceEditor({ mode, id }: { mode: "new" | "edit"; id?: string 
             <CardContent className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5 sm:col-span-2">
                 <Label>Select existing customer</Label>
-                <Select value={inv.customerId || undefined} onValueChange={pickCustomer}>
+                <Select value={inv.customerId ?? ""} onValueChange={pickCustomer}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Or fill fields below manually…" />
+                    <SelectValue
+                      placeholder={
+                        customers.length
+                          ? "Or fill fields below manually…"
+                          : "No customers yet — fill fields below"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {store.customers.map((c) => (
+                    {customers.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.name}
                       </SelectItem>
@@ -319,67 +349,64 @@ export function InvoiceEditor({ mode, id }: { mode: "new" | "edit"; id?: string 
                     </tr>
                   </thead>
                   <tbody>
-                    {inv.items.map((it, i) => {
-                      const sub = it.quantity * it.unitPrice - it.discount;
-                      return (
-                        <tr key={it.id} className="border-b last:border-0">
-                          <td className="py-2 pr-2">
-                            <Input
-                              value={it.description}
-                              onChange={(e) => updateItem(i, { description: e.target.value })}
-                              placeholder="Line description"
-                            />
-                          </td>
-                          <td className="py-2 pr-2">
-                            <Input
-                              type="number"
-                              min={0}
-                              value={it.quantity}
-                              onChange={(e) => updateItem(i, { quantity: +e.target.value })}
-                            />
-                          </td>
-                          <td className="py-2 pr-2">
-                            <Input
-                              type="number"
-                              min={0}
-                              step={0.01}
-                              value={it.unitPrice}
-                              onChange={(e) => updateItem(i, { unitPrice: +e.target.value })}
-                            />
-                          </td>
-                          <td className="py-2 pr-2">
-                            <Input
-                              type="number"
-                              min={0}
-                              step={0.01}
-                              value={it.discount}
-                              onChange={(e) => updateItem(i, { discount: +e.target.value })}
-                            />
-                          </td>
-                          <td className="py-2 pr-2">
-                            <Input
-                              type="number"
-                              min={0}
-                              value={it.vatRate}
-                              onChange={(e) => updateItem(i, { vatRate: +e.target.value })}
-                            />
-                          </td>
-                          <td className="py-2 pr-2 text-right font-medium">
-                            {formatMoney(sub, inv.currency)}
-                          </td>
-                          <td className="py-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeItem(i)}
-                              disabled={inv.items.length === 1}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {inv.items.map((it, i) => (
+                      <tr key={it.id} className="border-b last:border-0">
+                        <td className="py-2 pr-2">
+                          <Input
+                            value={it.description}
+                            onChange={(e) => updateItem(i, { description: e.target.value })}
+                            placeholder="Line description"
+                          />
+                        </td>
+                        <td className="py-2 pr-2">
+                          <Input
+                            type="number"
+                            min={0}
+                            value={it.quantity}
+                            onChange={(e) => updateItem(i, { quantity: +e.target.value })}
+                          />
+                        </td>
+                        <td className="py-2 pr-2">
+                          <Input
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            value={it.unitPrice}
+                            onChange={(e) => updateItem(i, { unitPrice: +e.target.value })}
+                          />
+                        </td>
+                        <td className="py-2 pr-2">
+                          <Input
+                            type="number"
+                            min={0}
+                            step={0.01}
+                            value={it.discount}
+                            onChange={(e) => updateItem(i, { discount: +e.target.value })}
+                          />
+                        </td>
+                        <td className="py-2 pr-2">
+                          <Input
+                            type="number"
+                            min={0}
+                            value={it.vatRate}
+                            onChange={(e) => updateItem(i, { vatRate: +e.target.value })}
+                          />
+                        </td>
+                        <td className="py-2 pr-2 text-right font-medium">
+                          {formatMoney(lineSubtotal(it), inv.currency)}
+                        </td>
+                        <td className="py-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeItem(i)}
+                            disabled={inv.items.length === 1}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -394,7 +421,7 @@ export function InvoiceEditor({ mode, id }: { mode: "new" | "edit"; id?: string 
               <Textarea
                 rows={3}
                 placeholder="Payment terms, references, thanks…"
-                value={inv.notes ?? ""}
+                value={inv.notes}
                 onChange={(e) => update({ notes: e.target.value })}
               />
             </CardContent>
@@ -423,21 +450,21 @@ export function InvoiceEditor({ mode, id }: { mode: "new" | "edit"; id?: string 
                 <Button
                   variant="outline"
                   className="w-full"
-                  onClick={() => toast.success("Invoice validated (demo)")}
+                  onClick={() => toast.info("Validation engine arrives in Phase 2")}
                 >
                   <ShieldCheck className="mr-1 h-4 w-4" /> Validate
                 </Button>
                 <Button
                   variant="outline"
                   className="w-full"
-                  onClick={() => toast.success("PDF downloaded (demo)")}
+                  onClick={() => toast.info("PDF export arrives in Phase 2")}
                 >
                   <FileDown className="mr-1 h-4 w-4" /> Download PDF
                 </Button>
                 <Button
                   variant="outline"
                   className="w-full"
-                  onClick={() => toast.success("Email queued (demo)")}
+                  onClick={() => toast.info("Email delivery arrives in Phase 4")}
                 >
                   <Mail className="mr-1 h-4 w-4" /> Email invoice
                 </Button>
@@ -462,7 +489,7 @@ export function InvoiceEditor({ mode, id }: { mode: "new" | "edit"; id?: string 
       <Dialog open={qrOpen} onOpenChange={setQrOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>ZATCA-style QR</DialogTitle>
+            <DialogTitle>ZATCA-style QR (preview)</DialogTitle>
           </DialogHeader>
           <div className="grid place-items-center py-4">
             <QrPreview value={qrValue} size={220} />
@@ -480,7 +507,9 @@ export function InvoiceEditor({ mode, id }: { mode: "new" | "edit"; id?: string 
             >
               Copy
             </Button>
-            <Button onClick={() => toast.success("QR image downloaded (demo)")}>Download QR</Button>
+            <Button onClick={() => toast.info("Real ZATCA TLV QR arrives in Phase 2")}>
+              Download QR
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -495,7 +524,7 @@ export function InvoiceRender({
   inv: Invoice;
   totals: ReturnType<typeof computeTotals>;
 }) {
-  const company = useStore((s) => s.company);
+  const { data: company } = useSuspenseQuery(companyQuery());
   const bilingual = inv.template === "bilingual" || inv.template === "arabic";
   return (
     <div className="rounded-lg border bg-white p-8 text-sm text-neutral-900">
@@ -543,19 +572,16 @@ export function InvoiceRender({
           </tr>
         </thead>
         <tbody>
-          {inv.items.map((it) => {
-            const sub = it.quantity * it.unitPrice - it.discount;
-            return (
-              <tr key={it.id} className="border-b last:border-0">
-                <td className="py-2">{it.description}</td>
-                <td className="text-center">{it.quantity}</td>
-                <td className="text-center">{it.unitPrice.toFixed(2)}</td>
-                <td className="text-center">{it.discount.toFixed(2)}</td>
-                <td className="text-center">{it.vatRate}%</td>
-                <td className="text-right">{sub.toFixed(2)}</td>
-              </tr>
-            );
-          })}
+          {inv.items.map((it) => (
+            <tr key={it.id} className="border-b last:border-0">
+              <td className="py-2">{it.description}</td>
+              <td className="text-center">{it.quantity}</td>
+              <td className="text-center">{it.unitPrice.toFixed(2)}</td>
+              <td className="text-center">{it.discount.toFixed(2)}</td>
+              <td className="text-center">{it.vatRate}%</td>
+              <td className="text-right">{lineSubtotal(it).toFixed(2)}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
       <div className="mt-4 flex justify-end">

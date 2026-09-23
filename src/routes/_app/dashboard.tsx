@@ -1,9 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useStore, formatMoney, computeTotals } from "@/lib/store";
+import { formatMoney, computeTotals, monthlySeries } from "@/lib/invoice-math";
+import { invoicesQuery } from "@/lib/queries";
+import { statusColors } from "./invoices.index";
 import {
   FileText,
   FileClock,
@@ -31,6 +34,7 @@ import {
 } from "recharts";
 
 export const Route = createFileRoute("/_app/dashboard")({
+  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(invoicesQuery()),
   head: () => ({
     meta: [
       { title: "Dashboard · AI Invoice Saudi" },
@@ -40,47 +44,30 @@ export const Route = createFileRoute("/_app/dashboard")({
   component: Dashboard,
 });
 
-const statusColors: Record<string, string> = {
-  paid: "bg-success/15 text-success border-success/30",
-  unpaid: "bg-warning/15 text-warning-foreground border-warning/40",
-  draft: "bg-muted text-muted-foreground border-border",
-  overdue: "bg-destructive/15 text-destructive border-destructive/30",
-};
-
 function Dashboard() {
-  const invoices = useStore((s) => s.invoices);
+  const { data: invoices } = useSuspenseQuery(invoicesQuery());
   const navigate = useNavigate();
   const total = invoices.length;
   const draft = invoices.filter((i) => i.status === "draft").length;
   const paid = invoices.filter((i) => i.status === "paid").length;
-  const unpaid = invoices.filter((i) => i.status === "unpaid" || i.status === "overdue").length;
-  let revenue = 0,
-    vatTotal = 0;
-  invoices.forEach((i) => {
+  const unpaidCount = invoices.filter((i) => i.status === "unpaid").length;
+  const overdueCount = invoices.filter((i) => i.status === "overdue").length;
+  let revenue = 0;
+  let vatTotal = 0;
+  for (const i of invoices) {
+    if (i.status === "draft") continue;
     const t = computeTotals(i.items);
     revenue += t.total;
     vatTotal += t.vat;
-  });
+  }
 
-  const monthly = ["Jun", "Jul", "Aug", "Sep", "Oct", "Nov"].map((m, idx) => ({
-    month: m,
-    revenue: [42000, 51000, 47500, 63000, 88000, 72500][idx],
-    vat: [6300, 7650, 7125, 9450, 13200, 10875][idx],
-  }));
+  const monthly = monthlySeries(invoices);
   const statusData = [
     { name: "Paid", value: paid, color: "var(--success)" },
-    {
-      name: "Unpaid",
-      value: invoices.filter((i) => i.status === "unpaid").length,
-      color: "var(--warning)",
-    },
-    {
-      name: "Overdue",
-      value: invoices.filter((i) => i.status === "overdue").length,
-      color: "var(--destructive)",
-    },
+    { name: "Unpaid", value: unpaidCount, color: "var(--warning)" },
+    { name: "Overdue", value: overdueCount, color: "var(--destructive)" },
     { name: "Draft", value: draft, color: "var(--muted-foreground)" },
-  ];
+  ].filter((s) => s.value > 0);
 
   const stats = [
     { label: "Total Invoices", value: total, icon: FileText, tint: "bg-primary/10 text-primary" },
@@ -93,7 +80,7 @@ function Dashboard() {
     { label: "Paid", value: paid, icon: CheckCircle2, tint: "bg-success/10 text-success" },
     {
       label: "Unpaid / Overdue",
-      value: unpaid,
+      value: unpaidCount + overdueCount,
       icon: AlertCircle,
       tint: "bg-destructive/10 text-destructive",
     },
@@ -169,7 +156,7 @@ function Dashboard() {
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2 shadow-soft">
           <CardHeader>
-            <CardTitle className="text-base">Monthly revenue</CardTitle>
+            <CardTitle className="text-base">Monthly revenue (last 6 months)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-64">
@@ -212,23 +199,29 @@ function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="h-64">
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie
-                    data={statusData}
-                    dataKey="value"
-                    nameKey="name"
-                    innerRadius={45}
-                    outerRadius={80}
-                    paddingAngle={3}
-                  >
-                    {statusData.map((s, i) => (
-                      <Cell key={i} fill={s.color} />
-                    ))}
-                  </Pie>
-                  <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-                </PieChart>
-              </ResponsiveContainer>
+              {statusData.length === 0 ? (
+                <div className="grid h-full place-items-center text-sm text-muted-foreground">
+                  No invoices yet
+                </div>
+              ) : (
+                <ResponsiveContainer>
+                  <PieChart>
+                    <Pie
+                      data={statusData}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={45}
+                      outerRadius={80}
+                      paddingAngle={3}
+                    >
+                      {statusData.map((s, i) => (
+                        <Cell key={i} fill={s.color} />
+                      ))}
+                    </Pie>
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -243,6 +236,15 @@ function Dashboard() {
         </CardHeader>
         <CardContent>
           <div className="divide-y">
+            {invoices.length === 0 && (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                No invoices yet.{" "}
+                <Link to="/invoices/new" className="text-primary font-medium">
+                  Create your first invoice
+                </Link>
+                .
+              </div>
+            )}
             {invoices.slice(0, 6).map((i) => {
               const t = computeTotals(i.items);
               return (

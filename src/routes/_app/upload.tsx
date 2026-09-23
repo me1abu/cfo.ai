@@ -14,9 +14,17 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { upsertInvoice, useStore, nextInvoiceNumber } from "@/lib/store";
+import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { companyQuery, invoicesQuery } from "@/lib/queries";
+import { nextInvoiceNumber } from "@/lib/invoice-math";
+import { saveInvoice } from "@/server/invoices";
 
 export const Route = createFileRoute("/_app/upload")({
+  loader: ({ context: { queryClient } }) =>
+    Promise.all([
+      queryClient.ensureQueryData(companyQuery()),
+      queryClient.ensureQueryData(invoicesQuery()),
+    ]),
   head: () => ({
     meta: [
       { title: "AI Upload · AI Invoice Saudi" },
@@ -48,7 +56,9 @@ function UploadPage() {
   }>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dragRef = useRef<HTMLDivElement>(null);
-  const store = useStore((s) => s);
+  const { data: company } = useSuspenseQuery(companyQuery());
+  const { data: invoices } = useSuspenseQuery(invoicesQuery());
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
 
   const handleFile = (f: File) => {
@@ -80,32 +90,41 @@ function UploadPage() {
     });
   };
 
+  const create = useMutation({
+    mutationFn: () =>
+      saveInvoice({
+        data: {
+          number: extracted!.number || nextInvoiceNumber(invoices),
+          date: extracted!.date,
+          dueDate: extracted!.dueDate,
+          customerId: null,
+          customerName: extracted!.customerName,
+          customerVat: extracted!.customerVat,
+          customerAddress: extracted!.customerAddress,
+          currency: company.currency,
+          items: extracted!.items.map((it) => ({
+            description: it.description,
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+            discount: 0,
+            vatRate: company.vatRate,
+          })),
+          status: "draft",
+          template: "modern",
+          notes: "",
+        },
+      }),
+    onSuccess: async (res) => {
+      if (!res.ok) return toast.error(res.error);
+      await queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      toast.success("Draft invoice created from document");
+      navigate({ to: "/invoices/$id", params: { id: res.id } });
+    },
+    onError: () => toast.error("Could not create the draft"),
+  });
   const createFromExtracted = () => {
     if (!extracted) return;
-    const inv = {
-      id: `inv_${Date.now()}`,
-      number: extracted.number || nextInvoiceNumber(store.invoices),
-      date: extracted.date,
-      dueDate: extracted.dueDate,
-      customerId: "",
-      customerName: extracted.customerName,
-      customerVat: extracted.customerVat,
-      customerAddress: extracted.customerAddress,
-      currency: store.company.currency,
-      items: extracted.items.map((it, i) => ({
-        id: `it_${i}_${Date.now()}`,
-        description: it.description,
-        quantity: it.quantity,
-        unitPrice: it.unitPrice,
-        discount: 0,
-        vatRate: store.company.vatRate,
-      })),
-      status: "draft" as const,
-      template: "modern" as const,
-    };
-    upsertInvoice(inv);
-    toast.success("Draft invoice created from document");
-    navigate({ to: "/invoices/$id", params: { id: inv.id } });
+    create.mutate();
   };
 
   return (

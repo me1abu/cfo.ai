@@ -25,8 +25,10 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { signOut } from "@/server/auth";
+import { settingsQuery } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -215,6 +217,16 @@ export function AppLayout() {
   const router = useRouter();
   const logout = useLogout();
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const { data: settings } = useQuery(settingsQuery());
+
+  // Apply the saved theme and text direction to the document.
+  useEffect(() => {
+    if (!settings) return;
+    document.documentElement.classList.toggle("dark", settings.theme === "dark");
+    document.documentElement.dir = settings.language === "ar" ? "rtl" : "ltr";
+    document.documentElement.lang = settings.language;
+  }, [settings]);
+
   const initials =
     user.name
       .split(" ")
