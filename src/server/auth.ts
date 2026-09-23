@@ -65,7 +65,7 @@ export const signUp = createServerFn({ method: "POST" })
       password: data.password,
       options: {
         data: { full_name: data.fullName, company: data.company },
-        emailRedirectTo: `${serverEnv.APP_URL}/login`,
+        emailRedirectTo: `${serverEnv.APP_URL}/verify-email`,
       },
     });
     if (error) return { ok: false as const, error: friendlyAuthError(error.message) };
@@ -98,19 +98,6 @@ export const signOut = createServerFn({ method: "POST" }).handler(async () => {
   return { ok: true as const };
 });
 
-export const verifyEmailOtp = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ email: emailSchema, token: z.string().length(6) }))
-  .handler(async ({ data }) => {
-    const supabase = getSupabaseServerClient();
-    const { error } = await supabase.auth.verifyOtp({
-      email: data.email,
-      token: data.token,
-      type: "signup",
-    });
-    if (error) return { ok: false as const, error: friendlyAuthError(error.message) };
-    return { ok: true as const };
-  });
-
 export const resendVerification = createServerFn({ method: "POST" })
   .inputValidator(z.object({ email: emailSchema }))
   .handler(async ({ data }) => {
@@ -131,8 +118,11 @@ export const requestPasswordReset = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
-/** Completes a reset link. Supabase puts `code` in the URL; exchanging it creates a session. */
-export const exchangeResetCode = createServerFn({ method: "POST" })
+/**
+ * Completes an email link (sign-up confirmation or password reset). Supabase redirects
+ * back with `?code=…` (PKCE); exchanging it creates the session in this browser.
+ */
+export const exchangeAuthCode = createServerFn({ method: "POST" })
   .inputValidator(z.object({ code: z.string().min(1) }))
   .handler(async ({ data }) => {
     const supabase = getSupabaseServerClient();

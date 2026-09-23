@@ -40,7 +40,7 @@ export const organizations = pgTable("organizations", {
   vatRate: numeric("vat_rate", { precision: 5, scale: 2, mode: "number" }).notNull().default(15),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}).enableRLS();
 
 /** Mirrors auth.users (same id). Holds per-user preferences and org membership. */
 export const profiles = pgTable("profiles", {
@@ -55,7 +55,7 @@ export const profiles = pgTable("profiles", {
   emailNotifs: boolean("email_notifs").notNull().default(true),
   smsNotifs: boolean("sms_notifs").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}).enableRLS();
 
 export const customers = pgTable(
   "customers",
@@ -75,7 +75,7 @@ export const customers = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("customers_org_idx").on(t.orgId)],
-);
+).enableRLS();
 
 export const invoices = pgTable(
   "invoices",
@@ -103,7 +103,7 @@ export const invoices = pgTable(
     uniqueIndex("invoices_org_number_uq").on(t.orgId, t.number),
     index("invoices_org_idx").on(t.orgId),
   ],
-);
+).enableRLS();
 
 export const invoiceItems = pgTable(
   "invoice_items",
@@ -120,7 +120,7 @@ export const invoiceItems = pgTable(
     vatRate: numeric("vat_rate", { precision: 5, scale: 2, mode: "number" }).notNull().default(15),
   },
   (t) => [index("invoice_items_invoice_idx").on(t.invoiceId)],
-);
+).enableRLS();
 
 export type Organization = typeof organizations.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;

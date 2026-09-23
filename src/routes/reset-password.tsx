@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthShell } from "@/components/AuthShell";
-import { exchangeResetCode, updatePassword } from "@/server/auth";
+import { exchangeAuthCode, updatePassword } from "@/server/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/reset-password")({
@@ -31,7 +31,7 @@ function Page() {
   // The email link lands here with ?code=…; exchange it for a session before allowing the update.
   useEffect(() => {
     if (!code) return;
-    exchangeResetCode({ data: { code } }).then((res) => {
+    exchangeAuthCode({ data: { code } }).then((res) => {
       if (!res.ok) setErr("This reset link is invalid or has expired. Request a new one.");
       setReady(true);
       navigate({ to: "/reset-password", search: {}, replace: true });
