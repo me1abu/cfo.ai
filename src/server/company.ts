@@ -49,7 +49,7 @@ export const getCompany = createServerFn({ method: "GET" }).handler(async () => 
 });
 
 export const updateCompany = createServerFn({ method: "POST" })
-  .inputValidator(companyInput)
+  .validator(companyInput)
   .handler(async ({ data }) => {
     const { orgId } = await requireUser();
     const [org] = await db

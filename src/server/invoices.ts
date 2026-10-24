@@ -89,7 +89,7 @@ export const listInvoices = createServerFn({ method: "GET" }).handler(async () =
 });
 
 export const getInvoice = createServerFn({ method: "GET" })
-  .inputValidator(z.object({ id: z.string().uuid() }))
+  .validator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }): Promise<Invoice | null> => {
     const { orgId } = await requireUser();
     const row = await db.query.invoices.findFirst({
@@ -104,7 +104,7 @@ export const getInvoice = createServerFn({ method: "GET" })
   });
 
 export const saveInvoice = createServerFn({ method: "POST" })
-  .inputValidator(invoiceInput)
+  .validator(invoiceInput)
   .handler(async ({ data }) => {
     const { orgId } = await requireUser();
     const values = {
@@ -165,7 +165,7 @@ export const saveInvoice = createServerFn({ method: "POST" })
   });
 
 export const deleteInvoice = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ id: z.string().uuid() }))
+  .validator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }) => {
     const { orgId } = await requireUser();
     await db

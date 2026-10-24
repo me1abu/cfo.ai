@@ -39,7 +39,7 @@ export const listCustomers = createServerFn({ method: "GET" }).handler(async () 
 });
 
 export const saveCustomer = createServerFn({ method: "POST" })
-  .inputValidator(customerInput)
+  .validator(customerInput)
   .handler(async ({ data }) => {
     const { orgId } = await requireUser();
     const { id, ...fields } = data;
@@ -60,7 +60,7 @@ export const saveCustomer = createServerFn({ method: "POST" })
   });
 
 export const deleteCustomer = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ id: z.string().uuid() }))
+  .validator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }) => {
     const { orgId } = await requireUser();
     await db

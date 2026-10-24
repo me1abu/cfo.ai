@@ -30,7 +30,7 @@ export const getSettings = createServerFn({ method: "GET" }).handler(async () =>
 });
 
 export const updateSettings = createServerFn({ method: "POST" })
-  .inputValidator(settingsInput)
+  .validator(settingsInput)
   .handler(async ({ data }) => {
     const { userId } = await requireUser();
     const [p] = await db

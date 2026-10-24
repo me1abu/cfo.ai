@@ -63,7 +63,7 @@ export const getSessionUser = createServerFn({ method: "GET" }).handler(
 );
 
 export const signIn = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ email: emailSchema, password: z.string().min(1) }))
+  .validator(z.object({ email: emailSchema, password: z.string().min(1) }))
   .handler(async ({ data }) => {
     const supabase = getSupabaseServerClient();
     const { error } = await supabase.auth.signInWithPassword(data);
@@ -72,7 +72,7 @@ export const signIn = createServerFn({ method: "POST" })
   });
 
 export const signUp = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     z.object({
       fullName: z.string().trim().min(1, "Full name is required"),
       company: z.string().trim().min(1, "Company name is required"),
@@ -121,7 +121,7 @@ export const signOut = createServerFn({ method: "POST" }).handler(async () => {
 });
 
 export const resendVerification = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ email: emailSchema }))
+  .validator(z.object({ email: emailSchema }))
   .handler(async ({ data }) => {
     const supabase = getSupabaseServerClient();
     const { error } = await supabase.auth.resend({ type: "signup", email: data.email });
@@ -130,7 +130,7 @@ export const resendVerification = createServerFn({ method: "POST" })
   });
 
 export const requestPasswordReset = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ email: emailSchema }))
+  .validator(z.object({ email: emailSchema }))
   .handler(async ({ data }) => {
     const supabase = getSupabaseServerClient();
     // Always report success so the endpoint can't be used to enumerate accounts.
@@ -145,7 +145,7 @@ export const requestPasswordReset = createServerFn({ method: "POST" })
  * back with `?code=…` (PKCE); exchanging it creates the session in this browser.
  */
 export const exchangeAuthCode = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ code: z.string().min(1) }))
+  .validator(z.object({ code: z.string().min(1) }))
   .handler(async ({ data }) => {
     const supabase = getSupabaseServerClient();
     const { error } = await supabase.auth.exchangeCodeForSession(data.code);
@@ -168,7 +168,7 @@ export const exchangeAuthCode = createServerFn({ method: "POST" })
  * `token_hash` + `type` (Supabase's recommended SSR pattern) instead of a PKCE code.
  */
 export const verifyTokenHash = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     z.object({
       tokenHash: z.string().min(1),
       type: z.enum(["signup", "email", "recovery", "email_change", "invite", "magiclink"]),
@@ -185,7 +185,7 @@ export const verifyTokenHash = createServerFn({ method: "POST" })
   });
 
 export const updatePassword = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ password: passwordSchema }))
+  .validator(z.object({ password: passwordSchema }))
   .handler(async ({ data }) => {
     const supabase = getSupabaseServerClient();
     const { error } = await supabase.auth.updateUser({ password: data.password });
