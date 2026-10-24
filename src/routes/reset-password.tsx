@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,10 +32,13 @@ function Page() {
   const [c, setC] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Single-use token: guard against StrictMode's double effect run in development.
+  const started = useRef(false);
 
   // The email link lands here with a token; turn it into a session before allowing the update.
   useEffect(() => {
-    if (!hasToken) return;
+    if (!hasToken || started.current) return;
+    started.current = true;
     const run = async () => {
       const res = token_hash
         ? await verifyTokenHash({ data: { tokenHash: token_hash, type: type ?? "recovery" } })
@@ -43,7 +46,7 @@ function Page() {
       if (!res.ok) {
         setErr(
           "reason" in res && res.reason === "verifier_missing"
-            ? "This reset link must be opened in the same browser where you requested it. Request a new link from that browser, or ask us to switch to browser-independent links."
+            ? "This reset link was opened in a different browser from the one that requested it. Request a new link and it will work from any browser."
             : "This reset link is invalid or has expired. Request a new one.",
         );
       }

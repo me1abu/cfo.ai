@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link, useRouter } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { MailCheck, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -41,9 +41,13 @@ function Page() {
   const [status, setStatus] = useState<Status>(hasToken ? "verifying" : "waiting");
   const [error, setError] = useState<string | null>(search.error_description ?? null);
   const [resending, setResending] = useState(false);
+  // Email tokens are single-use. React StrictMode runs effects twice in development,
+  // and a second call failing after the first succeeded would show a false error.
+  const started = useRef(false);
 
   useEffect(() => {
-    if (!hasToken) return;
+    if (!hasToken || started.current) return;
+    started.current = true;
     const run = async () => {
       const res = search.token_hash
         ? await verifyTokenHash({
