@@ -20,7 +20,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { QrPreview } from "@/components/QrPreview";
+import { ZatcaQrCode } from "@/components/ZatcaQrCode";
+import { downloadQrPng, useInvoiceQr } from "@/lib/invoice-qr";
+import { parseZatcaQr, QR_TAG_LABELS } from "@/lib/zatca-qr";
 import {
   computeTotals,
   formatMoney,
@@ -31,7 +33,7 @@ import {
   type Invoice,
   type InvoiceItem,
 } from "@/lib/invoice-math";
-import { companyQuery, customersQuery, invoicesQuery } from "@/lib/queries";
+import { companyQuery, customersQuery, invoiceQuery, invoicesQuery } from "@/lib/queries";
 import { saveInvoice } from "@/server/invoices";
 import {
   Trash2,
@@ -83,6 +85,7 @@ function NewInvoice() {
       status: "draft",
       notes: "",
       template: "modern",
+      issuedAt: null,
     }),
     // Only compute once for the new-invoice form.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -134,12 +137,17 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
           items: toSave.items.map(({ id: _id, ...rest }) => rest),
         },
       }),
-    onSuccess: async (res, toSave) => {
+    onSuccess: async (res) => {
       if (!res.ok) return toast.error(res.error);
       await queryClient.invalidateQueries({ queryKey: ["invoices"] });
       toast.success(mode === "new" ? "Invoice created" : "Invoice saved");
-      if (mode === "new") navigate({ to: "/invoices/$id", params: { id: res.id } });
-      else setInv(toSave);
+      if (mode === "new") {
+        navigate({ to: "/invoices/$id", params: { id: res.id } });
+      } else {
+        // Reload from the server so server-set fields (e.g. the issue timestamp) are current.
+        const fresh = await queryClient.fetchQuery(invoiceQuery(res.id));
+        if (fresh) setInv(fresh);
+      }
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Could not save invoice"),
   });
@@ -161,7 +169,7 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
       });
   };
 
-  const qrValue = `Seller:${company.name}|VAT:${company.vatNumber}|Date:${inv.date}|Total:${totals.total.toFixed(2)}|VAT:${totals.vat.toFixed(2)}`;
+  const qr = useInvoiceQr(inv, company);
   const busy = mutation.isPending;
 
   return (
@@ -489,28 +497,52 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
       <Dialog open={qrOpen} onOpenChange={setQrOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>ZATCA-style QR (preview)</DialogTitle>
+            <DialogTitle>ZATCA QR code</DialogTitle>
           </DialogHeader>
-          <div className="grid place-items-center py-4">
-            <QrPreview value={qrValue} size={220} />
-          </div>
-          <div className="rounded-md bg-muted p-3 text-xs text-muted-foreground break-all">
-            {qrValue}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                navigator.clipboard?.writeText(qrValue);
-                toast.success("Payload copied");
-              }}
-            >
-              Copy
-            </Button>
-            <Button onClick={() => toast.info("Real ZATCA TLV QR arrives in Phase 2")}>
-              Download QR
-            </Button>
-          </DialogFooter>
+          {qr.ok ? (
+            <>
+              <div className="grid place-items-center py-2">
+                <ZatcaQrCode payload={qr.payload} size={220} />
+              </div>
+              {qr.isPreview && (
+                <p className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs">
+                  Draft preview. The timestamp is fixed when the invoice is finalized, so the final
+                  code will differ.
+                </p>
+              )}
+              <dl className="divide-y rounded-md border text-xs">
+                {parseZatcaQr(qr.payload).tags.map((t) => (
+                  <div key={t.tag} className="grid grid-cols-[9rem_1fr] gap-2 px-3 py-1.5">
+                    <dt className="text-muted-foreground">{QR_TAG_LABELS[t.tag]}</dt>
+                    <dd className="break-all font-medium">{t.value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(qr.payload);
+                    toast.success("QR content copied");
+                  }}
+                >
+                  Copy content
+                </Button>
+                <Button
+                  onClick={() => downloadQrPng(qr.payload, `${inv.number || "invoice"}-qr.png`)}
+                >
+                  Download PNG
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <div className="space-y-3 text-sm">
+              <p className="text-destructive">{qr.error}</p>
+              <Button variant="outline" asChild>
+                <Link to="/company">Complete company profile</Link>
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
@@ -525,6 +557,7 @@ export function InvoiceRender({
   totals: ReturnType<typeof computeTotals>;
 }) {
   const { data: company } = useSuspenseQuery(companyQuery());
+  const qr = useInvoiceQr(inv, company);
   const bilingual = inv.template === "bilingual" || inv.template === "arabic";
   return (
     <div className="rounded-lg border bg-white p-8 text-sm text-neutral-900">
@@ -600,7 +633,14 @@ export function InvoiceRender({
           </div>
         </div>
       </div>
-      <div className="mt-6 border-t pt-3 text-xs text-neutral-500">{company.footer}</div>
+      <div className="mt-6 flex items-end justify-between gap-6 border-t pt-4">
+        <div className="text-xs text-neutral-500">{company.footer}</div>
+        {qr.ok ? (
+          <ZatcaQrCode payload={qr.payload} size={110} className="shrink-0" />
+        ) : (
+          <div className="w-40 shrink-0 text-right text-xs text-red-600">QR: {qr.error}</div>
+        )}
+      </div>
     </div>
   );
 }

@@ -48,6 +48,7 @@ function toInvoice(
     status: row.status,
     template: row.template,
     notes: row.notes,
+    issuedAt: row.issuedAt ? row.issuedAt.toISOString() : null,
     items: items
       .sort((a, b) => a.position - b.position)
       .map<InvoiceItem>((it) => ({
@@ -126,19 +127,26 @@ export const saveInvoice = createServerFn({ method: "POST" })
     try {
       const id = await db.transaction(async (tx) => {
         let invoiceId: string;
+        const finalizing = data.status !== "draft";
         if (data.id) {
+          const existing = await tx.query.invoices.findFirst({
+            where: and(eq(schema.invoices.id, data.id), eq(schema.invoices.orgId, orgId)),
+            columns: { issuedAt: true },
+          });
+          if (!existing) throw new Error("Invoice not found");
+          // The issue time is stamped once and never moved, so the QR timestamp stays stable.
+          const issuedAt = existing.issuedAt ?? (finalizing ? new Date() : null);
           const [updated] = await tx
             .update(schema.invoices)
-            .set(values)
+            .set({ ...values, issuedAt })
             .where(and(eq(schema.invoices.id, data.id), eq(schema.invoices.orgId, orgId)))
             .returning({ id: schema.invoices.id });
-          if (!updated) throw new Error("Invoice not found");
           invoiceId = updated.id;
           await tx.delete(schema.invoiceItems).where(eq(schema.invoiceItems.invoiceId, invoiceId));
         } else {
           const [created] = await tx
             .insert(schema.invoices)
-            .values(values)
+            .values({ ...values, issuedAt: finalizing ? new Date() : null })
             .returning({ id: schema.invoices.id });
           invoiceId = created.id;
         }

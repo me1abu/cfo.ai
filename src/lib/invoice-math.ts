@@ -26,6 +26,8 @@ export interface Invoice {
   status: InvoiceStatus;
   notes: string;
   template: InvoiceTemplate;
+  /** ISO timestamp set by the server when the invoice first leaves draft; null for drafts. */
+  issuedAt: string | null;
 }
 
 export interface Customer {

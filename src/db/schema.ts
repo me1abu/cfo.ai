@@ -96,6 +96,9 @@ export const invoices = pgTable(
     status: invoiceStatus("status").notNull().default("draft"),
     template: invoiceTemplate("template").notNull().default("modern"),
     notes: text("notes").notNull().default(""),
+    // Set once, when the invoice first leaves draft. Supplies the time component of the
+    // invoice timestamp required in the ZATCA QR code (tag 3). Null while draft.
+    issuedAt: timestamp("issued_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

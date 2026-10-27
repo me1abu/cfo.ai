@@ -12,3 +12,4 @@ node_modules
 .tanstack
 dist
 package-lock.json
+.claude/worktrees
