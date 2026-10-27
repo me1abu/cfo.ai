@@ -23,6 +23,8 @@ import {
 import { ZatcaQrCode } from "@/components/ZatcaQrCode";
 import { downloadQrPng, useInvoiceQr } from "@/lib/invoice-qr";
 import { parseZatcaQr, QR_TAG_LABELS } from "@/lib/zatca-qr";
+import { INVOICE_TITLES, invoiceKind, validateInvoice } from "@/lib/zatca-rules";
+import { ValidationReportView } from "@/components/ValidationReportView";
 import {
   computeTotals,
   formatMoney,
@@ -84,7 +86,7 @@ function NewInvoice() {
       items: [newItem(company.vatRate)],
       status: "draft",
       notes: "",
-      template: "modern",
+      template: "bilingual",
       issuedAt: null,
     }),
     // Only compute once for the new-invoice form.
@@ -114,8 +116,13 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
   const [inv, setInv] = useState<Invoice>(initial);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  const [validateOpen, setValidateOpen] = useState(false);
 
   const totals = useMemo(() => computeTotals(inv.items), [inv.items]);
+  const report = useMemo(
+    () => (validateOpen ? validateInvoice(inv, company) : null),
+    [validateOpen, inv, company],
+  );
 
   const update = (patch: Partial<Invoice>) => setInv((prev) => ({ ...prev, ...patch }));
   const updateItem = (idx: number, patch: Partial<InvoiceItem>) =>
@@ -455,11 +462,7 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
                 <span>{formatMoney(totals.total, inv.currency)}</span>
               </div>
               <div className="pt-4 space-y-2">
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => toast.info("Validation engine arrives in Phase 2")}
-                >
+                <Button variant="outline" className="w-full" onClick={() => setValidateOpen(true)}>
                   <ShieldCheck className="mr-1 h-4 w-4" /> Validate
                 </Button>
                 <Button
@@ -491,6 +494,18 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
             <DialogTitle>Invoice preview — {inv.template}</DialogTitle>
           </DialogHeader>
           <InvoiceRender inv={inv} totals={totals} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={validateOpen} onOpenChange={setValidateOpen}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Validation · {inv.number}</DialogTitle>
+          </DialogHeader>
+          {report && <ValidationReportView report={report} />}
+          <p className="text-xs text-muted-foreground">
+            Checks use the values on screen, including unsaved changes.
+          </p>
         </DialogContent>
       </Dialog>
 
@@ -559,6 +574,7 @@ export function InvoiceRender({
   const { data: company } = useSuspenseQuery(companyQuery());
   const qr = useInvoiceQr(inv, company);
   const bilingual = inv.template === "bilingual" || inv.template === "arabic";
+  const title = INVOICE_TITLES[invoiceKind(inv)];
   return (
     <div className="rounded-lg border bg-white p-8 text-sm text-neutral-900">
       <div className="flex items-start justify-between border-b pb-4">
@@ -571,7 +587,7 @@ export function InvoiceRender({
         </div>
         <div className="text-right">
           <div className="text-2xl font-semibold tracking-tight">
-            {bilingual ? "فاتورة ضريبية · Tax Invoice" : "Tax Invoice"}
+            {bilingual ? `${title.ar} · ${title.en}` : title.en}
           </div>
           <div className="mt-1 text-xs text-neutral-500">{inv.number}</div>
           <div className="text-xs text-neutral-500">

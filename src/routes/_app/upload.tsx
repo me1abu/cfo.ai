@@ -110,7 +110,7 @@ function UploadPage() {
             vatRate: company.vatRate,
           })),
           status: "draft",
-          template: "modern",
+          template: "bilingual",
           notes: "",
         },
       }),
