@@ -85,7 +85,12 @@ function Reports() {
         subtitle="Financial insights and VAT breakdowns"
         actions={
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => toast.info("PDF export arrives in Phase 2")}>
+            <Button
+              variant="outline"
+              onClick={() =>
+                toast.info("Report PDFs aren't available yet. Use CSV export for now.")
+              }
+            >
               <FileDown className="mr-1 h-4 w-4" /> PDF
             </Button>
             <Button variant="outline" onClick={() => toast.info("Excel export arrives in Phase 4")}>

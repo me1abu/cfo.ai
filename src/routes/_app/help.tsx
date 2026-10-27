@@ -69,24 +69,24 @@ function Help() {
           <Accordion type="single" collapsible>
             {[
               [
-                "Does AI Invoice comply with ZATCA Phase 2?",
-                "Yes. AI Invoice generates invoices with the required structured fields and QR payload used by ZATCA Phase 2 e-invoicing. Consult your tax advisor for final integration steps with the FATOORA platform.",
+                "Does AI Invoice support ZATCA e-invoicing?",
+                "Not yet. AI Invoice supports ZATCA Phase 1 (generation): tax invoices with the required fields in Arabic and English, validation against ZATCA's published rules, and the Phase 1 QR code. Phase 2 (integration with the FATOORA platform: XML invoices, cryptographic stamps and reporting or clearance with ZATCA) is not supported yet. Check with ZATCA or your tax advisor whether your business is already required to integrate.",
               ],
               [
-                "What file formats can I upload?",
-                "PDF, JPG, PNG, DOCX and XLSX files up to 25 MB each.",
+                "Can I upload documents?",
+                "Reading invoice data from uploaded documents with AI is in development and not available yet. The QR scanner already reads PNG, JPG and WebP images.",
               ],
               [
-                "Is my data stored in Saudi Arabia?",
-                "Customer data is stored in KSA-region data centers with encryption at rest and in transit.",
+                "Where is my data stored?",
+                "Data is stored with our database provider, Supabase, in its Singapore region (AWS ap-southeast-1), and is encrypted in transit.",
               ],
               [
                 "How is VAT calculated?",
-                "The default VAT rate is 15%. VAT is applied per line item after any discount, and totals are aggregated with proper rounding to two decimals.",
+                "The default VAT rate is 15%. VAT is calculated per line after any discount and rounded to the nearest halala, as ZATCA's tax invoicing guideline requires.",
               ],
               [
                 "Can I generate bilingual (Arabic/English) invoices?",
-                "Yes — pick the Arabic-English template inside the invoice editor.",
+                "Yes. New invoices use the Arabic-English template by default, and downloaded PDFs label every field in both languages. ZATCA requires tax invoices to be issued in Arabic.",
               ],
             ].map(([q, a], i) => (
               <AccordionItem key={i} value={`q${i}`}>

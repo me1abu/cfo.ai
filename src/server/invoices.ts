@@ -89,19 +89,24 @@ export const listInvoices = createServerFn({ method: "GET" }).handler(async () =
   return rows.map((r) => toInvoice(r, byInvoice.get(r.id) ?? []));
 });
 
+/** Loads one invoice scoped to the organisation. Server-only helper. */
+export async function loadInvoice(orgId: string, id: string): Promise<Invoice | null> {
+  const row = await db.query.invoices.findFirst({
+    where: and(eq(schema.invoices.id, id), eq(schema.invoices.orgId, orgId)),
+  });
+  if (!row) return null;
+  const items = await db
+    .select()
+    .from(schema.invoiceItems)
+    .where(eq(schema.invoiceItems.invoiceId, row.id));
+  return toInvoice(row, items);
+}
+
 export const getInvoice = createServerFn({ method: "GET" })
   .validator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }): Promise<Invoice | null> => {
     const { orgId } = await requireUser();
-    const row = await db.query.invoices.findFirst({
-      where: and(eq(schema.invoices.id, data.id), eq(schema.invoices.orgId, orgId)),
-    });
-    if (!row) return null;
-    const items = await db
-      .select()
-      .from(schema.invoiceItems)
-      .where(eq(schema.invoiceItems.invoiceId, row.id));
-    return toInvoice(row, items);
+    return loadInvoice(orgId, data.id);
   });
 
 export const saveInvoice = createServerFn({ method: "POST" })

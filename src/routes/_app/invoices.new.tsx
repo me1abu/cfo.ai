@@ -37,6 +37,8 @@ import {
 } from "@/lib/invoice-math";
 import { companyQuery, customersQuery, invoiceQuery, invoicesQuery } from "@/lib/queries";
 import { saveInvoice } from "@/server/invoices";
+import { getInvoicePdf } from "@/server/pdf";
+import { downloadBase64 } from "@/lib/download";
 import {
   Trash2,
   Plus,
@@ -114,6 +116,10 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
   const { data: company } = useSuspenseQuery(companyQuery());
   const { data: customers } = useSuspenseQuery(customersQuery());
   const [inv, setInv] = useState<Invoice>(initial);
+  // Snapshot of the last saved state, so PDFs are only generated from saved data.
+  const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(initial));
+  const dirty = JSON.stringify(inv) !== savedSnapshot;
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [validateOpen, setValidateOpen] = useState(false);
@@ -153,7 +159,10 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
       } else {
         // Reload from the server so server-set fields (e.g. the issue timestamp) are current.
         const fresh = await queryClient.fetchQuery(invoiceQuery(res.id));
-        if (fresh) setInv(fresh);
+        if (fresh) {
+          setInv(fresh);
+          setSavedSnapshot(JSON.stringify(fresh));
+        }
       }
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Could not save invoice"),
@@ -179,6 +188,21 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
   const qr = useInvoiceQr(inv, company);
   const busy = mutation.isPending;
 
+  const downloadPdf = async () => {
+    if (!inv.id) return toast.error("Save the invoice first, then download the PDF.");
+    if (dirty) return toast.error("You have unsaved changes. Save first so the PDF matches.");
+    setPdfBusy(true);
+    try {
+      const res = await getInvoicePdf({ data: { id: inv.id } });
+      if (!res.ok) return toast.error(res.error);
+      downloadBase64(res.base64, res.filename, "application/pdf");
+    } catch {
+      toast.error("Could not generate the PDF");
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -200,8 +224,8 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
             <Button variant="outline" onClick={() => setQrOpen(true)}>
               <QrCode className="mr-1 h-4 w-4" /> Generate QR
             </Button>
-            <Button variant="outline" onClick={() => toast.info("PDF export arrives in Phase 2")}>
-              <FileDown className="mr-1 h-4 w-4" /> Generate PDF
+            <Button variant="outline" onClick={downloadPdf} disabled={pdfBusy}>
+              <FileDown className="mr-1 h-4 w-4" /> {pdfBusy ? "Generating…" : "Download PDF"}
             </Button>
             <Button onClick={() => save("unpaid")} disabled={busy}>
               {busy ? "Saving…" : "Save & finalize"}
@@ -468,9 +492,11 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
                 <Button
                   variant="outline"
                   className="w-full"
-                  onClick={() => toast.info("PDF export arrives in Phase 2")}
+                  onClick={downloadPdf}
+                  disabled={pdfBusy}
+                  data-testid="download-pdf"
                 >
-                  <FileDown className="mr-1 h-4 w-4" /> Download PDF
+                  <FileDown className="mr-1 h-4 w-4" /> {pdfBusy ? "Generating…" : "Download PDF"}
                 </Button>
                 <Button
                   variant="outline"

@@ -39,13 +39,18 @@ const toCompany = (o: typeof schema.organizations.$inferSelect): Company => ({
   vatRate: o.vatRate,
 });
 
-export const getCompany = createServerFn({ method: "GET" }).handler(async () => {
-  const { orgId } = await requireUser();
+/** Loads the organisation's company profile. Server-only helper. */
+export async function loadCompany(orgId: string): Promise<Company> {
   const org = await db.query.organizations.findFirst({
     where: eq(schema.organizations.id, orgId),
   });
   if (!org) throw new Error("Organisation not found");
   return toCompany(org);
+}
+
+export const getCompany = createServerFn({ method: "GET" }).handler(async () => {
+  const { orgId } = await requireUser();
+  return loadCompany(orgId);
 });
 
 export const updateCompany = createServerFn({ method: "POST" })

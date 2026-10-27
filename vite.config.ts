@@ -9,7 +9,19 @@ import { nitro } from "nitro/vite";
 const preset = process.env.NITRO_PRESET ?? "node-server";
 
 export default defineConfig({
-  plugins: [tanstackStart(), viteReact(), tailwindcss(), nitro({ preset })],
+  plugins: [
+    tanstackStart(),
+    viteReact(),
+    tailwindcss(),
+    nitro({
+      preset,
+      // pdfkit (used by @react-pdf/renderer) resolves its built-in fonts through
+      // package.json "imports" ("#standard-fonts/*"). Bundled into a chunk, that alias
+      // map is lost and PDF rendering fails at runtime. Ship the whole package ("pkg*" =
+      // full trace) because it loads the .cjs font files via require().
+      traceDeps: ["pdfkit*"],
+    }),
+  ],
   resolve: {
     tsconfigPaths: true,
     dedupe: ["react", "react-dom", "@tanstack/react-router", "@tanstack/react-start"],
