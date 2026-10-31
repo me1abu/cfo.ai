@@ -175,3 +175,51 @@ export function plusDaysISO(days: number, from = new Date()) {
   d.setDate(d.getDate() + days);
   return toLocalISODate(d);
 }
+
+/** Today's date in Saudi Arabia as YYYY-MM-DD, the same on the server (UTC) and in the browser. */
+export function riyadhTodayISO(now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh" }).format(now);
+}
+
+/** What the app shows: the stored status plus "credited" for invoices cancelled in full. */
+export type DisplayStatus = InvoiceStatus | "credited";
+
+export interface PaymentView {
+  status: DisplayStatus;
+  /** Total of issued credit notes against this invoice. */
+  credited: number;
+  /** What the customer still owes: unpaid or overdue invoices less credits; otherwise 0. */
+  outstanding: number;
+}
+
+/**
+ * Payment view of every document. The stored status only records what a person set (unpaid or
+ * paid). Overdue (due date passed, Riyadh time) and credited (issued credit notes cover the full
+ * total) are worked out here, so they can't go stale.
+ */
+export function paymentViews(docs: Invoice[], today: string): Map<string, PaymentView> {
+  const credited = new Map<string, number>();
+  for (const d of docs) {
+    if (isCreditNote(d) && isIssued(d) && d.originalInvoiceId) {
+      const prev = credited.get(d.originalInvoiceId) ?? 0;
+      credited.set(d.originalInvoiceId, round2(prev + computeTotals(d.items).total));
+    }
+  }
+  const views = new Map<string, PaymentView>();
+  for (const d of docs) {
+    // Credit notes and drafts keep their stored status ("overdue" was never valid for them).
+    if (isCreditNote(d) || d.status === "draft") {
+      views.set(d.id, { status: d.status, credited: 0, outstanding: 0 });
+      continue;
+    }
+    const total = computeTotals(d.items).total;
+    const c = credited.get(d.id) ?? 0;
+    let status: DisplayStatus;
+    if (c > 0 && c >= total) status = "credited";
+    else if (d.status === "paid") status = "paid";
+    else status = d.dueDate < today ? "overdue" : "unpaid";
+    const owed = status === "unpaid" || status === "overdue";
+    views.set(d.id, { status, credited: c, outstanding: owed ? round2(total - c) : 0 });
+  }
+  return views;
+}

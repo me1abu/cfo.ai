@@ -37,7 +37,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { formatMoney, computeTotals, isCreditNote, isIssued } from "@/lib/invoice-math";
+import {
+  formatMoney,
+  computeTotals,
+  isCreditNote,
+  isIssued,
+  paymentViews,
+  riyadhTodayISO,
+} from "@/lib/invoice-math";
+import { statusColors } from "@/lib/status-style";
 import { invoicesQuery } from "@/lib/queries";
 import { deleteInvoice } from "@/server/invoices";
 import { Plus, Search, MoreHorizontal, ArrowUpDown } from "lucide-react";
@@ -54,13 +62,6 @@ export const Route = createFileRoute("/_app/invoices/")({
   }),
   component: Invoices,
 });
-
-export const statusColors: Record<string, string> = {
-  paid: "bg-success/15 text-success border-success/30",
-  unpaid: "bg-warning/20 text-warning-foreground border-warning/40",
-  draft: "bg-muted text-muted-foreground border-border",
-  overdue: "bg-destructive/15 text-destructive border-destructive/30",
-};
 
 function Invoices() {
   const { data: invoices } = useSuspenseQuery(invoicesQuery());
@@ -83,10 +84,13 @@ function Invoices() {
     onError: () => toast.error("Could not delete invoice"),
   });
 
+  const views = useMemo(() => paymentViews(invoices, riyadhTodayISO()), [invoices]);
+  const statusOf = (id: string) => views.get(id)!.status;
+
   const filtered = useMemo(() => {
     const list = invoices.filter(
       (i) =>
-        (status === "all" || i.status === status) &&
+        (status === "all" || views.get(i.id)!.status === status) &&
         (q === "" || `${i.number} ${i.customerName}`.toLowerCase().includes(q.toLowerCase())),
     );
     return [...list].sort((a, b) => {
@@ -139,7 +143,7 @@ function Invoices() {
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                {["all", "draft", "paid", "unpaid", "overdue"].map((s) => (
+                {["all", "draft", "paid", "unpaid", "overdue", "credited"].map((s) => (
                   <SelectItem key={s} value={s}>
                     {s === "all" ? "All statuses" : s}
                   </SelectItem>
@@ -216,12 +220,12 @@ function Invoices() {
                     <TableCell>{i.date}</TableCell>
                     <TableCell>{i.dueDate}</TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={statusColors[i.status]}>
+                      <Badge variant="outline" className={statusColors[statusOf(i.id)]}>
                         {isCreditNote(i) && i.status !== "draft"
                           ? i.status === "paid"
                             ? "settled"
                             : "open"
-                          : i.status}
+                          : statusOf(i.id)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-semibold">

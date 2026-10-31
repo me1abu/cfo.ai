@@ -3,6 +3,8 @@ import {
   computeTotals,
   monthlySeries,
   nextInvoiceNumber,
+  paymentViews,
+  riyadhTodayISO,
   round2,
   signedTotals,
   type Invoice,
@@ -95,5 +97,84 @@ describe("credit notes in numbering and reporting", () => {
       new Date(2026, 9, 27),
     );
     expect(series[0]).toMatchObject({ revenue: 1035, vat: 135 });
+  });
+});
+
+describe("paymentViews", () => {
+  const inv = (id: string, over: Partial<Invoice> = {}): Invoice => ({
+    id,
+    documentType: "invoice",
+    originalInvoiceId: null,
+    reason: "",
+    number: id,
+    date: "2026-10-01",
+    dueDate: "2026-10-31",
+    customerId: null,
+    customerName: "C",
+    customerVat: "",
+    customerAddress: "",
+    currency: "SAR",
+    items: [{ id: "1", description: "x", quantity: 1, unitPrice: 1000, discount: 0, vatRate: 15 }],
+    status: "unpaid",
+    notes: "",
+    template: "bilingual",
+    issuedAt: "2026-10-01T08:00:00Z",
+    ...over,
+  });
+  const cn = (id: string, of: string, unitPrice: number, issued = true): Invoice =>
+    inv(id, {
+      documentType: "credit_note",
+      originalInvoiceId: of,
+      items: [{ id: "1", description: "x", quantity: 1, unitPrice, discount: 0, vatRate: 15 }],
+      issuedAt: issued ? "2026-10-02T08:00:00Z" : null,
+      status: issued ? "unpaid" : "draft",
+    });
+
+  it("becomes overdue the day after the due date, not on it", () => {
+    expect(paymentViews([inv("A")], "2026-10-31").get("A")!.status).toBe("unpaid");
+    expect(paymentViews([inv("A")], "2026-11-01").get("A")).toEqual({
+      status: "overdue",
+      credited: 0,
+      outstanding: 1150,
+    });
+  });
+
+  it("treats a stored 'overdue' that isn't due yet as unpaid, and leaves paid alone", () => {
+    expect(paymentViews([inv("A", { status: "overdue" })], "2026-10-15").get("A")!.status).toBe(
+      "unpaid",
+    );
+    expect(paymentViews([inv("A", { status: "paid" })], "2026-12-01").get("A")!.status).toBe(
+      "paid",
+    );
+  });
+
+  it("marks an invoice credited when issued credit notes cover it in full", () => {
+    const v = paymentViews([inv("A"), cn("CN1", "A", 400), cn("CN2", "A", 600)], "2026-12-01").get(
+      "A",
+    )!;
+    expect(v).toEqual({ status: "credited", credited: 1150, outstanding: 0 });
+  });
+
+  it("reduces what is owed by partial and ignores draft credit notes", () => {
+    const v = paymentViews(
+      [inv("A"), cn("CN1", "A", 400), cn("CN2", "A", 600, false)],
+      "2026-10-15",
+    );
+    expect(v.get("A")).toEqual({ status: "unpaid", credited: 460, outstanding: 690 });
+    expect(v.get("CN1")!.status).toBe("unpaid");
+    expect(v.get("CN2")!.status).toBe("draft");
+  });
+
+  it("leaves drafts as drafts even when past due", () => {
+    expect(
+      paymentViews([inv("A", { status: "draft", issuedAt: null })], "2027-01-01").get("A")!.status,
+    ).toBe("draft");
+  });
+});
+
+describe("riyadhTodayISO", () => {
+  it("uses the Saudi date, which is ahead of UTC late in the evening", () => {
+    expect(riyadhTodayISO(new Date("2026-10-31T21:30:00Z"))).toBe("2026-11-01");
+    expect(riyadhTodayISO(new Date("2026-10-31T20:59:00Z"))).toBe("2026-10-31");
   });
 });

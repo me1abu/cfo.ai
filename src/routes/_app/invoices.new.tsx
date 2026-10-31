@@ -38,9 +38,12 @@ import {
   lineSubtotal,
   round2,
   nextInvoiceNumber,
+  paymentViews,
   plusDaysISO,
+  riyadhTodayISO,
   todayISO,
   type Invoice,
+  type PaymentView,
   type InvoiceItem,
 } from "@/lib/invoice-math";
 import { companyQuery, customersQuery, invoiceQuery, invoicesQuery } from "@/lib/queries";
@@ -140,6 +143,10 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
   const { data: allDocs } = useSuspenseQuery(invoicesQuery());
   const locked = isIssued(inv);
   const credit = isCreditNote(inv);
+  const payment = useMemo(
+    () => paymentViews(allDocs, riyadhTodayISO()).get(inv.id),
+    [allDocs, inv.id],
+  );
   const title = documentTitle(inv);
   const noun = credit ? "credit note" : "invoice";
 
@@ -210,8 +217,7 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
   });
 
   const statusMutation = useMutation({
-    mutationFn: (status: "unpaid" | "paid" | "overdue") =>
-      setInvoiceStatus({ data: { id: inv.id, status } }),
+    mutationFn: (status: "unpaid" | "paid") => setInvoiceStatus({ data: { id: inv.id, status } }),
     onSuccess: async (res) => {
       if (!res.ok) return toast.error(res.error);
       await queryClient.invalidateQueries({ queryKey: ["invoices"] });
@@ -340,8 +346,8 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
             <div className="flex items-center gap-2">
               <Label className="text-xs text-muted-foreground">Payment status</Label>
               <Select
-                value={inv.status}
-                onValueChange={(v) => statusMutation.mutate(v as "unpaid" | "paid" | "overdue")}
+                value={inv.status === "paid" ? "paid" : "unpaid"}
+                onValueChange={(v) => statusMutation.mutate(v as "unpaid" | "paid")}
                 disabled={statusMutation.isPending}
               >
                 <SelectTrigger className="w-40" data-testid="payment-status">
@@ -350,9 +356,14 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
                 <SelectContent>
                   <SelectItem value="unpaid">{credit ? "Open" : "Unpaid"}</SelectItem>
                   <SelectItem value="paid">{credit ? "Settled" : "Paid"}</SelectItem>
-                  {!credit && <SelectItem value="overdue">Overdue</SelectItem>}
                 </SelectContent>
               </Select>
+              {payment &&
+                !credit &&
+                (payment.status !== "unpaid" || payment.credited > 0) &&
+                payment.status !== "paid" && (
+                  <PaymentNote payment={payment} dueDate={inv.dueDate} currency={inv.currency} />
+                )}
             </div>
           </CardContent>
         </Card>
@@ -894,5 +905,33 @@ export function InvoiceRender({
         )}
       </div>
     </div>
+  );
+}
+
+function PaymentNote({
+  payment,
+  dueDate,
+  currency,
+}: {
+  payment: PaymentView;
+  dueDate: string;
+  currency: string;
+}) {
+  const owed = formatMoney(payment.outstanding, currency);
+  const text =
+    payment.status === "credited"
+      ? "Cancelled in full by credit notes. Nothing is owed."
+      : payment.status === "overdue"
+        ? `Overdue: was due ${dueDate}. ${owed} outstanding.`
+        : `${formatMoney(payment.credited, currency)} credited; ${owed} still owed.`;
+  return (
+    <span
+      className={
+        payment.status === "overdue" ? "text-xs text-destructive" : "text-xs text-muted-foreground"
+      }
+      data-testid="payment-note"
+    >
+      {text}
+    </span>
   );
 }

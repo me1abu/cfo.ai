@@ -8,7 +8,15 @@ import { z } from "zod/v4";
 import { asc, eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { loadCompany, loadDocs } from "../data.server";
-import { computeTotals, round2, signedTotals, type Invoice } from "@/lib/invoice-math";
+import {
+  computeTotals,
+  paymentViews,
+  riyadhTodayISO,
+  round2,
+  signedTotals,
+  type Invoice,
+  type PaymentView,
+} from "@/lib/invoice-math";
 import { documentTitle, originalInfoFromDocs, validateInvoice } from "@/lib/zatca-rules";
 import { FALLBACK, MODEL, getClaude } from "./claude.server";
 import { stripMarkdown } from "@/lib/plain-text";
@@ -27,12 +35,15 @@ const dateArg = z
   .optional()
   .describe("Inclusive date YYYY-MM-DD");
 
-function summary(d: Invoice) {
+function summary(d: Invoice, view: PaymentView | undefined) {
   const t = computeTotals(d.items);
   return {
     number: d.number,
     type: d.documentType,
-    status: d.status,
+    // Credit notes: "unpaid" means open (not yet refunded or applied), "paid" means settled.
+    status: view?.status ?? d.status,
+    credited: view?.credited || undefined,
+    outstanding: view?.outstanding || undefined,
     issued: d.issuedAt !== null,
     date: d.date,
     dueDate: d.dueDate,
@@ -50,7 +61,9 @@ function inRange(d: Invoice, from?: string, to?: string) {
 
 function buildTools(orgId: string) {
   let docsCache: Invoice[] | null = null;
+  let viewsCache: Map<string, PaymentView> | null = null;
   const docs = async () => (docsCache ??= await loadDocs(db, orgId));
+  const views = async () => (viewsCache ??= paymentViews(await docs(), riyadhTodayISO()));
 
   return [
     betaZodTool({
@@ -58,7 +71,12 @@ function buildTools(orgId: string) {
       description:
         "List invoices and credit notes, newest first, with totals. Filter by status, document type, customer name (partial match) and issue-date range.",
       inputSchema: z.object({
-        status: z.enum(["draft", "unpaid", "paid", "overdue"]).optional(),
+        status: z
+          .enum(["draft", "unpaid", "paid", "overdue", "credited"])
+          .optional()
+          .describe(
+            "overdue = past its due date and not paid; credited = cancelled in full by credit notes",
+          ),
         documentType: z.enum(["invoice", "credit_note"]).optional(),
         customer: z.string().optional(),
         from: dateArg,
@@ -66,8 +84,9 @@ function buildTools(orgId: string) {
         limit: z.number().int().min(1).max(50).optional(),
       }),
       run: async (a) => {
+        const v = await views();
         const rows = (await docs())
-          .filter((d) => !a.status || d.status === a.status)
+          .filter((d) => !a.status || v.get(d.id)?.status === a.status)
           .filter((d) => !a.documentType || d.documentType === a.documentType)
           .filter(
             (d) => !a.customer || d.customerName.toLowerCase().includes(a.customer.toLowerCase()),
@@ -75,7 +94,7 @@ function buildTools(orgId: string) {
           .filter((d) => inRange(d, a.from, a.to));
         return JSON.stringify({
           matched: rows.length,
-          documents: rows.slice(0, a.limit ?? 20).map(summary),
+          documents: rows.slice(0, a.limit ?? 20).map((d) => summary(d, v.get(d.id))),
         });
       },
     }),
@@ -86,13 +105,14 @@ function buildTools(orgId: string) {
       inputSchema: z.object({ number: z.string() }),
       run: async ({ number }) => {
         const all = await docs();
+        const v = await views();
         const d = all.find((x) => x.number.toLowerCase() === number.trim().toLowerCase());
         if (!d) return JSON.stringify({ error: `No document numbered ${number}` });
         const original = d.originalInvoiceId
           ? all.find((x) => x.id === d.originalInvoiceId)
           : undefined;
         return JSON.stringify({
-          ...summary(d),
+          ...summary(d, v.get(d.id)),
           title: documentTitle(d).en,
           customerVat: d.customerVat,
           customerAddress: d.customerAddress,
@@ -100,17 +120,20 @@ function buildTools(orgId: string) {
           amends: original?.number,
           notes: d.notes || undefined,
           lines: d.items.map(({ id: _id, ...l }) => l),
-          creditNotes: all.filter((x) => x.originalInvoiceId === d.id).map(summary),
+          creditNotes: all
+            .filter((x) => x.originalInvoiceId === d.id)
+            .map((x) => summary(x, v.get(x.id))),
         });
       },
     }),
     betaZodTool({
       name: "revenue_summary",
       description:
-        "Revenue and VAT for a date range, net of issued credit notes, plus amounts still unpaid and overdue. Drafts are excluded.",
+        "Revenue and VAT for a date range, net of issued credit notes, plus what customers still owe on invoices in that range (unpaid, and overdue = past due date), after credit notes. Drafts are excluded.",
       inputSchema: z.object({ from: dateArg, to: dateArg }),
       run: async ({ from, to }) => {
         const rows = (await docs()).filter((d) => inRange(d, from, to));
+        const v = await views();
         let revenue = 0;
         let vat = 0;
         let unpaid = 0;
@@ -119,10 +142,9 @@ function buildTools(orgId: string) {
           const t = signedTotals(d);
           revenue = round2(revenue + t.total);
           vat = round2(vat + t.vat);
-          if (d.documentType === "invoice" && d.status === "unpaid")
-            unpaid = round2(unpaid + t.total);
-          if (d.documentType === "invoice" && d.status === "overdue")
-            overdue = round2(overdue + t.total);
+          const p = v.get(d.id);
+          if (p?.status === "unpaid") unpaid = round2(unpaid + p.outstanding);
+          if (p?.status === "overdue") overdue = round2(overdue + p.outstanding);
         }
         return JSON.stringify({
           from: from ?? "beginning",
@@ -204,7 +226,9 @@ export async function runAssistant(orgId: string, history: ChatTurn[]): Promise<
     betas: [...FALLBACK.betas],
     model: MODEL,
     max_tokens: 16000,
-    system: SYSTEM,
+    system: `${SYSTEM}
+
+Today is ${riyadhTodayISO()} (Saudi Arabia).`,
     output_config: { effort: "medium" },
     tools: buildTools(orgId),
     messages,

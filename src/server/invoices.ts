@@ -191,7 +191,8 @@ export const saveInvoice = createServerFn({ method: "POST" })
 
 /** Payment status is the only thing that may change once a document is issued. */
 export const setInvoiceStatus = createServerFn({ method: "POST" })
-  .validator(z.object({ id: z.string().uuid(), status: z.enum(["unpaid", "paid", "overdue"]) }))
+  // Overdue and credited are derived from dates and credit notes (paymentViews), not stored.
+  .validator(z.object({ id: z.string().uuid(), status: z.enum(["unpaid", "paid"]) }))
   .handler(async ({ data }) => {
     const { orgId } = await requireUser();
     const existing = await db.query.invoices.findFirst({
@@ -201,9 +202,6 @@ export const setInvoiceStatus = createServerFn({ method: "POST" })
     if (!existing) return { ok: false as const, error: "Invoice not found" };
     if (!existing.issuedAt) {
       return { ok: false as const, error: "Issue the document before recording payment." };
-    }
-    if (existing.documentType === "credit_note" && data.status === "overdue") {
-      return { ok: false as const, error: "Credit notes can be open or settled, not overdue." };
     }
     await db
       .update(schema.invoices)

@@ -9,11 +9,13 @@ import {
   computeTotals,
   isCreditNote,
   monthlySeries,
+  paymentViews,
+  riyadhTodayISO,
   round2,
   signedTotals,
 } from "@/lib/invoice-math";
 import { invoicesQuery } from "@/lib/queries";
-import { statusColors } from "./invoices.index";
+import { statusColors } from "@/lib/status-style";
 import {
   FileText,
   FileClock,
@@ -56,11 +58,15 @@ function Dashboard() {
   const navigate = useNavigate();
   // Counts are for invoices; revenue and VAT are net of issued credit notes.
   const onlyInvoices = invoices.filter((i) => !isCreditNote(i));
+  const views = paymentViews(invoices, riyadhTodayISO());
+  const statusOf = (id: string) => views.get(id)!.status;
+  const count = (s: string) => onlyInvoices.filter((i) => statusOf(i.id) === s).length;
   const total = onlyInvoices.length;
-  const draft = onlyInvoices.filter((i) => i.status === "draft").length;
-  const paid = onlyInvoices.filter((i) => i.status === "paid").length;
-  const unpaidCount = onlyInvoices.filter((i) => i.status === "unpaid").length;
-  const overdueCount = onlyInvoices.filter((i) => i.status === "overdue").length;
+  const draft = count("draft");
+  const paid = count("paid");
+  const unpaidCount = count("unpaid");
+  const overdueCount = count("overdue");
+  const creditedCount = count("credited");
   let revenue = 0;
   let vatTotal = 0;
   for (const i of invoices) {
@@ -74,6 +80,7 @@ function Dashboard() {
     { name: "Paid", value: paid, color: "var(--success)" },
     { name: "Unpaid", value: unpaidCount, color: "var(--warning)" },
     { name: "Overdue", value: overdueCount, color: "var(--destructive)" },
+    { name: "Credited", value: creditedCount, color: "var(--primary)" },
     { name: "Draft", value: draft, color: "var(--muted-foreground)" },
   ].filter((s) => s.value > 0);
 
@@ -270,8 +277,8 @@ function Dashboard() {
                           credit note
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className={statusColors[i.status]}>
-                          {i.status}
+                        <Badge variant="outline" className={statusColors[statusOf(i.id)]}>
+                          {statusOf(i.id)}
                         </Badge>
                       )}
                     </div>
