@@ -4,9 +4,9 @@ import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { nitro } from "nitro/vite";
 
-// Deployment target. Defaults to a plain Node server; set NITRO_PRESET=vercel in
-// Vercel's build environment (or locally) to emit a Vercel-compatible output.
-const preset = process.env.NITRO_PRESET ?? "node-server";
+// Deployment target: Vercel when building on Vercel (it sets VERCEL=1), otherwise a plain Node
+// server. NITRO_PRESET overrides either, e.g. NITRO_PRESET=vercel to inspect Vercel output locally.
+const preset = process.env.NITRO_PRESET ?? (process.env.VERCEL ? "vercel" : "node-server");
 
 export default defineConfig({
   plugins: [
@@ -20,6 +20,9 @@ export default defineConfig({
       // map is lost and PDF rendering fails at runtime. Ship the whole package ("pkg*" =
       // full trace) because it loads the .cjs font files via require().
       traceDeps: ["pdfkit*"],
+      // Run server functions in Singapore, next to the Supabase database (ap-southeast-1).
+      // Vercel's default region is Washington DC, which would add a Pacific round trip per query.
+      vercel: { functions: { regions: ["sin1"] } },
     }),
   ],
   resolve: {
