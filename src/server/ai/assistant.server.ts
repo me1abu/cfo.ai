@@ -11,6 +11,7 @@ import { loadCompany, loadDocs } from "../data.server";
 import { computeTotals, round2, signedTotals, type Invoice } from "@/lib/invoice-math";
 import { documentTitle, originalInfoFromDocs, validateInvoice } from "@/lib/zatca-rules";
 import { FALLBACK, MODEL, getClaude } from "./claude.server";
+import { stripMarkdown } from "@/lib/plain-text";
 
 const SYSTEM = `You are the assistant inside AI Invoice Saudi, an invoicing app for businesses in Saudi Arabia. You help the signed-in user understand their own invoices, credit notes, customers and VAT.
 
@@ -214,10 +215,12 @@ export async function runAssistant(orgId: string, history: ChatTurn[]): Promise<
   if (final.stop_reason === "refusal") {
     throw new AssistantRefusedError("The assistant can't help with that request.");
   }
-  const text = final.content
-    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("\n")
-    .trim();
+  const text = stripMarkdown(
+    final.content
+      .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim(),
+  );
   return text || "I couldn't put together an answer. Try rephrasing the question.";
 }

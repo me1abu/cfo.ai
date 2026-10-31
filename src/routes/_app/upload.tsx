@@ -105,6 +105,8 @@ function UploadPage() {
   const sellerVat = extraction?.seller.vatNumber?.replace(/\s+/g, "") ?? "";
   const issuedBySomeoneElse =
     !!extraction?.seller.name && !!sellerVat && sellerVat !== company.vatNumber;
+  const isNote =
+    extraction?.documentKind === "credit_note" || extraction?.documentKind === "debit_note";
   const totals = draft ? computeTotals(draft.items) : null;
 
   const createDraft = () => {
@@ -222,7 +224,10 @@ function UploadPage() {
               </Button>
             </div>
 
-            {(issuedBySomeoneElse || !extraction.isInvoice || extraction.warnings.length > 0) && (
+            {(issuedBySomeoneElse ||
+              isNote ||
+              !extraction.isInvoice ||
+              extraction.warnings.length > 0) && (
               <ul className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs">
                 {issuedBySomeoneElse && (
                   <li>
@@ -232,6 +237,13 @@ function UploadPage() {
                       Validation page
                     </Link>{" "}
                     instead.
+                  </li>
+                )}
+                {isNote && (
+                  <li>
+                    This is a {extraction.documentKind.replace(/_/g, " ")}. Creating a draft here
+                    makes an ordinary invoice. To issue a credit note, open the original invoice and
+                    choose Issue credit note.
                   </li>
                 )}
                 {!extraction.isInvoice && (
