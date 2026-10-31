@@ -4,7 +4,14 @@ import { PageHeader } from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatMoney, computeTotals, monthlySeries } from "@/lib/invoice-math";
+import {
+  formatMoney,
+  computeTotals,
+  isCreditNote,
+  monthlySeries,
+  round2,
+  signedTotals,
+} from "@/lib/invoice-math";
 import { invoicesQuery } from "@/lib/queries";
 import {
   BarChart,
@@ -34,17 +41,19 @@ function Reports() {
   const { data: invoices } = useSuspenseQuery(invoicesQuery());
   const monthlyRevenue = monthlySeries(invoices);
 
+  // Net of issued credit notes; drafts count as zero.
   const byCustomer = invoices.reduce<Record<string, number>>((acc, inv) => {
     if (inv.status === "draft") return acc;
-    const t = computeTotals(inv.items).total;
-    acc[inv.customerName] = (acc[inv.customerName] ?? 0) + t;
+    acc[inv.customerName] = round2((acc[inv.customerName] ?? 0) + signedTotals(inv).total);
     return acc;
   }, {});
   const customerRows = Object.entries(byCustomer).sort((a, b) => b[1] - a[1]);
 
   const exportCsv = () => {
     const header = [
+      "Type",
       "Number",
+      "Original invoice",
       "Customer",
       "Date",
       "Due",
@@ -54,18 +63,23 @@ function Reports() {
       "VAT",
       "Total",
     ];
+    const numberOf = new Map(invoices.map((d) => [d.id, d.number]));
     const lines = invoices.map((i) => {
       const t = computeTotals(i.items);
+      // Credit notes are exported as negative amounts so columns sum to net figures.
+      const k = isCreditNote(i) ? -1 : 1;
       return [
+        isCreditNote(i) ? "Credit note" : "Invoice",
         i.number,
+        i.originalInvoiceId ? (numberOf.get(i.originalInvoiceId) ?? "") : "",
         i.customerName,
         i.date,
         i.dueDate,
         i.status,
         i.currency,
-        t.subtotal,
-        t.vat,
-        t.total,
+        round2(k * t.subtotal),
+        round2(k * t.vat),
+        round2(k * t.total),
       ]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
         .join(",");
@@ -192,10 +206,18 @@ function Reports() {
                     const t = computeTotals(i.items);
                     return (
                       <tr key={i.id} className="border-t">
-                        <td className="p-3 font-medium">{i.number}</td>
+                        <td className="p-3 font-medium">
+                          {i.number}
+                          {isCreditNote(i) && (
+                            <span className="ml-2 text-xs text-primary">credit note</span>
+                          )}
+                        </td>
                         <td className="p-3">{i.customerName}</td>
                         <td className="p-3 text-center capitalize">{i.status}</td>
-                        <td className="p-3 text-right">{formatMoney(t.total, i.currency)}</td>
+                        <td className="p-3 text-right">
+                          {isCreditNote(i) ? "−" : ""}
+                          {formatMoney(t.total, i.currency)}
+                        </td>
                       </tr>
                     );
                   })}

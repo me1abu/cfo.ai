@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Company, Invoice } from "./invoice-math";
-import { invoiceKind, isValidSaudiVatNumber, validateInvoice } from "./zatca-rules";
+import {
+  invoiceKind,
+  isValidSaudiVatNumber,
+  validateInvoice,
+  type OriginalInvoiceInfo,
+} from "./zatca-rules";
 
 const company: Company = {
   name: "Nawa Technologies LLC",
@@ -19,6 +24,9 @@ const company: Company = {
 
 const invoice = (patch: Partial<Invoice> = {}): Invoice => ({
   id: "x",
+  documentType: "invoice",
+  originalInvoiceId: null,
+  reason: "",
   number: "INV-2026-1001",
   date: "2026-10-20",
   dueDate: "2026-11-19",
@@ -146,5 +154,72 @@ describe("validateInvoice", () => {
       "warn",
     );
     expect(statusOf(invoice({ dueDate: "2026-10-01" }), "due-date")).toBe("warn");
+  });
+});
+
+describe("credit notes (TIG s.7, XML BR-KSA-17/56)", () => {
+  const original: OriginalInvoiceInfo = {
+    number: "INV-2026-1001",
+    date: "2026-10-20",
+    issued: true,
+    documentType: "invoice",
+    creditable: 20700,
+  };
+  const note = (patch: Partial<Invoice> = {}) =>
+    invoice({
+      documentType: "credit_note",
+      originalInvoiceId: "orig",
+      number: "CN-2026-1001",
+      reason: "Goods or services returned and accepted by the supplier",
+      items: [
+        {
+          id: "1",
+          description: "Returned item",
+          quantity: 10,
+          unitPrice: 450,
+          discount: 0,
+          vatRate: 15,
+        },
+      ],
+      ...patch,
+    });
+  const runNote = (inv: Invoice, o: OriginalInvoiceInfo | null = original) =>
+    validateInvoice(inv, company, { today: "2026-10-27", original: o });
+  const statusIn = (r: ReturnType<typeof runNote>, id: string) =>
+    r.checks.find((c) => c.id === id)?.status;
+
+  it("a referenced credit note with a reason within the creditable amount is ready", () => {
+    const r = runNote(note());
+    expect(r.ready).toBe(true);
+    expect(r.title).toEqual({ en: "Credit Note", ar: "إشعار دائن" });
+    expect(statusIn(r, "credit-reference")).toBe("pass");
+    expect(statusIn(r, "credit-amount")).toBe("pass");
+    expect(statusIn(r, "credit-reason")).toBe("pass");
+  });
+
+  it("fails without a reason", () => {
+    expect(statusIn(runNote(note({ reason: " " })), "credit-reason")).toBe("fail");
+  });
+
+  it("fails without an issued original invoice", () => {
+    expect(statusIn(runNote(note(), null), "credit-reference")).toBe("fail");
+    expect(statusIn(runNote(note(), { ...original, issued: false }), "credit-reference")).toBe(
+      "fail",
+    );
+    expect(
+      statusIn(runNote(note(), { ...original, documentType: "credit_note" }), "credit-reference"),
+    ).toBe("fail");
+  });
+
+  it("fails when crediting more than remains on the original", () => {
+    // 10 x 450 = 4,500 + 15% = 5,175 against 5,000 remaining.
+    const r = runNote(note(), { ...original, creditable: 5000 });
+    expect(statusIn(r, "credit-amount")).toBe("fail");
+    expect(r.ready).toBe(false);
+  });
+
+  it("does not apply the SAR 1,000 simplified-invoice warning to credit notes", () => {
+    const r = runNote(note({ customerVat: "", customerAddress: "" }));
+    expect(statusIn(r, "invoice-type")).toBe("pass");
   });
 });

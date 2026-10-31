@@ -3,7 +3,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { requireUser } from "./context";
-import type { Company } from "@/lib/invoice-math";
+import { loadCompany, toCompany } from "./data.server";
 
 const companyInput = z.object({
   name: z.string().trim().min(1, "Company name is required").max(200),
@@ -23,30 +23,6 @@ const companyInput = z.object({
     .transform((s) => s.toUpperCase()),
   vatRate: z.number().min(0).max(100),
 });
-
-const toCompany = (o: typeof schema.organizations.$inferSelect): Company => ({
-  name: o.name,
-  logoUrl: o.logoUrl,
-  vatNumber: o.vatNumber,
-  crNumber: o.crNumber,
-  address: o.address,
-  bank: o.bank,
-  email: o.email,
-  phone: o.phone,
-  website: o.website,
-  footer: o.footer,
-  currency: o.currency,
-  vatRate: o.vatRate,
-});
-
-/** Loads the organisation's company profile. Server-only helper. */
-export async function loadCompany(orgId: string): Promise<Company> {
-  const org = await db.query.organizations.findFirst({
-    where: eq(schema.organizations.id, orgId),
-  });
-  if (!org) throw new Error("Organisation not found");
-  return toCompany(org);
-}
 
 export const getCompany = createServerFn({ method: "GET" }).handler(async () => {
   const { orgId } = await requireUser();

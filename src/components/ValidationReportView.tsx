@@ -1,5 +1,5 @@
 import { CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
-import { INVOICE_TITLES, type ValidationReport } from "@/lib/zatca-rules";
+import type { ValidationReport } from "@/lib/zatca-rules";
 
 const ORDER = { fail: 0, warn: 1, pass: 2 } as const;
 
@@ -21,7 +21,7 @@ export function ValidationReportView({ report }: { report: ValidationReport }) {
           </div>
         )}
         <span className="text-sm text-muted-foreground">
-          {INVOICE_TITLES[report.kind].en} · {counts.pass} passed · {counts.warn} warning
+          {report.title.en} · {counts.pass} passed · {counts.warn} warning
           {counts.warn === 1 ? "" : "s"} · {counts.fail} failed
         </span>
       </div>

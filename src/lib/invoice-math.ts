@@ -2,6 +2,8 @@
 
 export type InvoiceStatus = "draft" | "paid" | "unpaid" | "overdue";
 export type InvoiceTemplate = "modern" | "corporate" | "minimal" | "arabic" | "bilingual";
+/** "credit_note" reduces a previously issued invoice (ZATCA Tax Invoicing Guideline s.7). */
+export type DocumentType = "invoice" | "credit_note";
 
 export interface InvoiceItem {
   id: string;
@@ -14,6 +16,11 @@ export interface InvoiceItem {
 
 export interface Invoice {
   id: string;
+  documentType: DocumentType;
+  /** For credit notes: the issued invoice being reduced. */
+  originalInvoiceId: string | null;
+  /** For credit notes: why it was issued (XML BR-KSA-17). */
+  reason: string;
   number: string;
   date: string; // YYYY-MM-DD
   dueDate: string; // YYYY-MM-DD
@@ -28,6 +35,19 @@ export interface Invoice {
   template: InvoiceTemplate;
   /** ISO timestamp set by the server when the invoice first leaves draft; null for drafts. */
   issuedAt: string | null;
+}
+
+/** Issued documents are locked: content can't change, only payment status. */
+export const isIssued = (inv: Pick<Invoice, "issuedAt">) => inv.issuedAt !== null;
+export const isCreditNote = (inv: Pick<Invoice, "documentType">) =>
+  inv.documentType === "credit_note";
+
+/** Totals with credit notes negative, for revenue and VAT reporting. Drafts count as zero. */
+export function signedTotals(inv: Invoice) {
+  if (inv.status === "draft") return { subtotal: 0, vat: 0, total: 0 };
+  const t = computeTotals(inv.items);
+  const k = isCreditNote(inv) ? -1 : 1;
+  return { subtotal: k * t.subtotal, vat: k * t.vat, total: k * t.total };
 }
 
 export interface Customer {
@@ -94,20 +114,28 @@ export function formatMoney(n: number, currency = "SAR") {
   })}`;
 }
 
-/** Next number in the INV-YYYY-NNNN sequence, based on the highest existing sequence. */
+/**
+ * Next number in a PREFIX-YYYY-NNNN sequence, based on the highest existing sequence among
+ * documents of the same type. Invoices use "INV", credit notes "CN".
+ */
 export function nextInvoiceNumber(
-  existing: Array<{ number: string }>,
+  existing: Array<{ number: string; documentType?: DocumentType }>,
   year = new Date().getFullYear(),
+  type: DocumentType = "invoice",
 ) {
   let max = 1000;
-  for (const { number } of existing) {
+  for (const { number, documentType = "invoice" } of existing) {
+    if (documentType !== type) continue;
     const m = number.match(/(\d+)\s*$/);
     if (m) max = Math.max(max, parseInt(m[1], 10));
   }
-  return `INV-${year}-${max + 1}`;
+  return `${type === "credit_note" ? "CN" : "INV"}-${year}-${max + 1}`;
 }
 
-/** Revenue and VAT totals per month for the last `months` months, oldest first. Drafts excluded. */
+/**
+ * Revenue and VAT per month for the last `months` months, oldest first. Drafts are excluded and
+ * credit notes are subtracted.
+ */
 export function monthlySeries(invoices: Invoice[], months = 6, now = new Date()) {
   const buckets: { key: string; month: string; revenue: number; vat: number }[] = [];
   for (let i = months - 1; i >= 0; i--) {
@@ -121,10 +149,9 @@ export function monthlySeries(invoices: Invoice[], months = 6, now = new Date())
   }
   const byKey = new Map(buckets.map((b) => [b.key, b]));
   for (const inv of invoices) {
-    if (inv.status === "draft") continue;
     const b = byKey.get(inv.date.slice(0, 7));
     if (!b) continue;
-    const t = computeTotals(inv.items);
+    const t = signedTotals(inv);
     b.revenue = round2(b.revenue + t.total);
     b.vat = round2(b.vat + t.vat);
   }

@@ -35,12 +35,23 @@ import {
   type Invoice,
 } from "@/lib/invoice-math";
 import { buildPhase1Qr, invoiceQrTimestamp, ZatcaQrError } from "@/lib/zatca-qr";
-import { INVOICE_TITLES, invoiceKind } from "@/lib/zatca-rules";
+import { documentTitle } from "@/lib/zatca-rules";
 import { QR_IMAGE_OPTIONS } from "@/lib/invoice-qr";
 
-let fontsRegistered = false;
-function registerFonts() {
-  if (fontsRegistered) return;
+/**
+ * Registers fresh font instances. Must be called before every render.
+ *
+ * react-pdf keeps one parsed font per registration and reuses it across documents. Reusing it
+ * drops glyphs in later documents: in testing, every word-initial "ه" vanished from the second
+ * PDF rendered in a process ("هيئة" became "يئة"). Font.reset() doesn't help (it clears the data
+ * but not the cached load promise), so we replace our registrations before each render.
+ */
+function registerFreshFonts() {
+  // Drop only our families (Font.clear() would also remove the built-in Helvetica that react-pdf
+  // falls back to). getRegisteredFonts() returns the live registry object.
+  const registry = Font.getRegisteredFonts() as Record<string, unknown>;
+  delete registry["Noto Sans"];
+  delete registry["Cairo"];
   Font.register({
     family: "Noto Sans",
     fonts: [
@@ -57,7 +68,14 @@ function registerFonts() {
   });
   // Never hyphenate: it splits Arabic words and invoice identifiers.
   Font.registerHyphenationCallback((word) => [word]);
-  fontsRegistered = true;
+}
+
+// Font registration is global, so a render must not overlap another render's re-registration.
+let renderQueue: Promise<unknown> = Promise.resolve();
+function serialized<T>(task: () => Promise<T>): Promise<T> {
+  const run = renderQueue.then(task, task);
+  renderQueue = run.catch(() => undefined);
+  return run;
 }
 
 const L = {
@@ -84,6 +102,11 @@ const L = {
   notes: { en: "Notes", ar: "ملاحظات" },
   bank: { en: "Bank details", ar: "تفاصيل الحساب البنكي" },
   draft: { en: "DRAFT", ar: "مسودة" },
+  // Credit-note wording follows ZATCA's credit-note samples in the TIG annex.
+  noteNumber: { en: "Credit note number", ar: "رقم الإشعار" },
+  noteDate: { en: "Credit note date", ar: "تاريخ الإشعار" },
+  reason: { en: "Reason", ar: "سبب الإصدار" },
+  totalCredit: { en: "Total credit amount", ar: "إجمالي مبلغ الإشعار" },
 } as const;
 
 const C = {
@@ -155,6 +178,13 @@ const s = StyleSheet.create({
     borderBottom: `1pt solid ${C.line}`,
   },
   totalDue: { borderBottom: 0, borderTop: `1.5pt solid ${C.ink}`, marginTop: 2 },
+  creditBox: {
+    border: `1pt solid ${C.line}`,
+    borderRadius: 4,
+    padding: 8,
+    marginBottom: 12,
+    backgroundColor: C.head,
+  },
   qrBox: { alignItems: "center" },
   qr: { width: 104, height: 104 },
   section: { marginTop: 14 },
@@ -240,11 +270,13 @@ export interface InvoicePdfProps {
   company: Company;
   /** PNG data URL of the ZATCA QR code, or null with a reason. */
   qr: { dataUrl: string } | { error: string };
+  /** For credit notes: the invoice being amended. */
+  original?: { number: string; date: string } | null;
 }
 
-export function InvoicePdf({ invoice: inv, company, qr }: InvoicePdfProps) {
-  registerFonts();
-  const title = INVOICE_TITLES[invoiceKind(inv)];
+export function InvoicePdf({ invoice: inv, company, qr, original }: InvoicePdfProps) {
+  const title = documentTitle(inv);
+  const isCredit = inv.documentType === "credit_note";
   const totals = computeTotals(inv.items);
   const cur = inv.currency;
   const isDraft = inv.status === "draft";
@@ -278,14 +310,32 @@ export function InvoicePdf({ invoice: inv, company, qr }: InvoicePdfProps) {
         </View>
 
         <View style={s.meta}>
-          <MetaRow label={L.invoiceNumber} value={inv.number} />
-          <MetaRow label={L.invoiceDate} value={dmy(inv.date)} />
+          <MetaRow label={isCredit ? L.noteNumber : L.invoiceNumber} value={inv.number} />
+          <MetaRow label={isCredit ? L.noteDate : L.invoiceDate} value={dmy(inv.date)} />
           <MetaRow
             label={L.issueTime}
             value={inv.issuedAt ? riyadhTime.format(new Date(inv.issuedAt)) : "—"}
           />
-          <MetaRow label={L.dueDate} value={dmy(inv.dueDate)} />
+          {isCredit ? null : <MetaRow label={L.dueDate} value={dmy(inv.dueDate)} />}
         </View>
+
+        {isCredit ? (
+          <View style={s.creditBox}>
+            {original ? (
+              <>
+                <Text>
+                  This credit note relates to invoice number ({original.number}), issued on{" "}
+                  {dmy(original.date)}
+                </Text>
+                <Text style={s.ar}>
+                  {`هذا الإشعار الدائن يتعلق بالفاتورة رقم (${original.number}) الصادرة بتاريخ ${dmy(original.date)}`}
+                </Text>
+              </>
+            ) : null}
+            <PairLabel label={L.reason} />
+            <Auto value={inv.reason || "—"} style={s.bold} />
+          </View>
+        ) : null}
 
         <View style={s.parties}>
           <View style={s.party}>
@@ -380,8 +430,8 @@ export function InvoicePdf({ invoice: inv, company, qr }: InvoicePdfProps) {
             ))}
             <View style={[s.totalRow, s.totalDue]}>
               <View style={{ flex: 1 }}>
-                <Text style={s.bold}>{L.totalDue.en}</Text>
-                <Text style={[s.ar, s.bold]}>{L.totalDue.ar}</Text>
+                <Text style={s.bold}>{(isCredit ? L.totalCredit : L.totalDue).en}</Text>
+                <Text style={[s.ar, s.bold]}>{(isCredit ? L.totalCredit : L.totalDue).ar}</Text>
               </View>
               <Text style={[s.bold, { width: 100, textAlign: "right", fontSize: 11 }]}>
                 {cur} {money(totals.total)}
@@ -432,7 +482,16 @@ export async function buildPdfQr(inv: Invoice, company: Company): Promise<Invoic
   }
 }
 
-export async function renderInvoicePdf(invoice: Invoice, company: Company): Promise<Buffer> {
+export async function renderInvoicePdf(
+  invoice: Invoice,
+  company: Company,
+  original: InvoicePdfProps["original"] = null,
+): Promise<Buffer> {
   const qr = await buildPdfQr(invoice, company);
-  return renderToBuffer(<InvoicePdf invoice={invoice} company={company} qr={qr} />);
+  return serialized(() => {
+    registerFreshFonts();
+    return renderToBuffer(
+      <InvoicePdf invoice={invoice} company={company} qr={qr} original={original} />,
+    );
+  });
 }

@@ -10,9 +10,14 @@ import {
   pgEnum,
   uniqueIndex,
   index,
+  check,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const invoiceStatus = pgEnum("invoice_status", ["draft", "unpaid", "paid", "overdue"]);
+// "credit_note" reduces a previously issued tax invoice (ZATCA Tax Invoicing Guideline s.7).
+export const documentType = pgEnum("document_type", ["invoice", "credit_note"]);
 export const invoiceTemplate = pgEnum("invoice_template", [
   "modern",
   "corporate",
@@ -84,6 +89,13 @@ export const invoices = pgTable(
     orgId: uuid("org_id")
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
+    documentType: documentType("document_type").notNull().default("invoice"),
+    // Credit notes must reference the invoice they amend (XML BR-KSA-56) and state a reason
+    // (BR-KSA-17). Issued invoices can't be deleted, so the reference stays valid.
+    originalInvoiceId: uuid("original_invoice_id").references((): AnyPgColumn => invoices.id, {
+      onDelete: "restrict",
+    }),
+    reason: text("reason").notNull().default(""),
     number: text("number").notNull(),
     issueDate: date("issue_date").notNull(),
     dueDate: date("due_date").notNull(),
@@ -105,6 +117,11 @@ export const invoices = pgTable(
   (t) => [
     uniqueIndex("invoices_org_number_uq").on(t.orgId, t.number),
     index("invoices_org_idx").on(t.orgId),
+    index("invoices_original_idx").on(t.originalInvoiceId),
+    check(
+      "credit_note_has_original",
+      sql`${t.documentType} <> 'credit_note' OR ${t.originalInvoiceId} IS NOT NULL`,
+    ),
   ],
 ).enableRLS();
 

@@ -44,6 +44,35 @@ export const INVOICE_TITLES: Record<InvoiceKind, { en: string; ar: string }> = {
   simplified: { en: "Simplified Tax Invoice", ar: "فاتورة ضريبية مبسطة" },
 };
 
+/** As printed on ZATCA's credit-note samples in the TIG annex. */
+export const CREDIT_NOTE_TITLE = { en: "Credit Note", ar: "إشعار دائن" };
+
+export function documentTitle(inv: Pick<Invoice, "documentType" | "customerVat">) {
+  return inv.documentType === "credit_note" ? CREDIT_NOTE_TITLE : INVOICE_TITLES[invoiceKind(inv)];
+}
+
+/**
+ * Reasons a credit note may be issued, from the Tax Invoicing Guideline s.7.1. A credit note may
+ * not be used for adjustments unrelated to a prior supply (s.7.1, Example 19).
+ */
+export const CREDIT_NOTE_REASONS = [
+  "Supply cancelled or suspended, in whole or in part",
+  "Change in the nature of the supply affecting the tax due",
+  "Price reduced after the sale, including an additional discount",
+  "Goods or services returned and accepted by the supplier",
+  "Error in the supplier's or customer's details on the invoice",
+] as const;
+
+/** What the validator needs to know about the invoice a credit note amends. */
+export interface OriginalInvoiceInfo {
+  number: string;
+  date: string;
+  issued: boolean;
+  documentType: Invoice["documentType"];
+  /** Original total minus other issued credit notes against it. */
+  creditable: number;
+}
+
 export type CheckStatus = "pass" | "warn" | "fail";
 
 export interface ValidationCheck {
@@ -56,6 +85,7 @@ export interface ValidationCheck {
 
 export interface ValidationReport {
   kind: InvoiceKind;
+  title: { en: string; ar: string };
   checks: ValidationCheck[];
   counts: Record<CheckStatus, number>;
   /** True when no check failed. Warnings still deserve a look. */
@@ -93,7 +123,7 @@ function isRealDate(iso: string) {
 export function validateInvoice(
   inv: Invoice,
   company: Company,
-  opts: { today?: string } = {},
+  opts: { today?: string; original?: OriginalInvoiceInfo | null } = {},
 ): ValidationReport {
   const checks: ValidationCheck[] = [];
   const kind = invoiceKind(inv);
@@ -185,8 +215,66 @@ export function validateInvoice(
     );
   }
 
+  // --- Credit note reference and reason ------------------------------------------------
+  if (inv.documentType === "credit_note") {
+    const o = opts.original;
+    if (!o || !o.issued || o.documentType !== "invoice") {
+      checks.push(
+        fail(
+          "credit-reference",
+          "Original invoice",
+          "A credit note must reference the issued tax invoice it amends.",
+          "TIG 7, XML BR-KSA-56",
+        ),
+      );
+    } else {
+      checks.push(
+        pass(
+          "credit-reference",
+          "Original invoice",
+          `Amends invoice ${o.number}, issued ${o.date}.`,
+          "TIG 7, XML BR-KSA-56",
+        ),
+      );
+      checks.push(
+        totals.total <= o.creditable + 0.005
+          ? pass(
+              "credit-amount",
+              "Credit amount",
+              `SAR ${totals.total.toFixed(2)} of SAR ${o.creditable.toFixed(2)} still creditable on ${o.number}.`,
+              "TIG 7",
+            )
+          : fail(
+              "credit-amount",
+              "Credit amount",
+              `SAR ${totals.total.toFixed(2)} exceeds the SAR ${o.creditable.toFixed(2)} still creditable on ${o.number}.`,
+              "TIG 7",
+            ),
+      );
+    }
+    checks.push(
+      inv.reason.trim()
+        ? pass("credit-reason", "Reason for the credit note", inv.reason, "XML BR-KSA-17, TIG 7.1")
+        : fail(
+            "credit-reason",
+            "Reason for the credit note",
+            "State why the credit note is issued, for example returned goods or a price reduction.",
+            "XML BR-KSA-17, TIG 7.1",
+          ),
+    );
+  }
+
   // --- Invoice type and customer ------------------------------------------------------
-  if (kind === "standard") {
+  if (inv.documentType === "credit_note") {
+    checks.push(
+      pass(
+        "invoice-type",
+        "Document type",
+        `Credit note for a ${kind === "standard" ? "standard" : "simplified"} tax invoice.`,
+        "TIG 7",
+      ),
+    );
+  } else if (kind === "standard") {
     checks.push(
       pass(
         "invoice-type",
@@ -386,5 +474,5 @@ export function validateInvoice(
 
   const counts = { pass: 0, warn: 0, fail: 0 };
   for (const c of checks) counts[c.status]++;
-  return { kind, checks, counts, ready: counts.fail === 0 };
+  return { kind, title: documentTitle(inv), checks, counts, ready: counts.fail === 0 };
 }

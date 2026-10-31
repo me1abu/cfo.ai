@@ -4,7 +4,14 @@ import { PageHeader } from "@/components/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatMoney, computeTotals, monthlySeries } from "@/lib/invoice-math";
+import {
+  formatMoney,
+  computeTotals,
+  isCreditNote,
+  monthlySeries,
+  round2,
+  signedTotals,
+} from "@/lib/invoice-math";
 import { invoicesQuery } from "@/lib/queries";
 import { statusColors } from "./invoices.index";
 import {
@@ -47,18 +54,19 @@ export const Route = createFileRoute("/_app/dashboard")({
 function Dashboard() {
   const { data: invoices } = useSuspenseQuery(invoicesQuery());
   const navigate = useNavigate();
-  const total = invoices.length;
-  const draft = invoices.filter((i) => i.status === "draft").length;
-  const paid = invoices.filter((i) => i.status === "paid").length;
-  const unpaidCount = invoices.filter((i) => i.status === "unpaid").length;
-  const overdueCount = invoices.filter((i) => i.status === "overdue").length;
+  // Counts are for invoices; revenue and VAT are net of issued credit notes.
+  const onlyInvoices = invoices.filter((i) => !isCreditNote(i));
+  const total = onlyInvoices.length;
+  const draft = onlyInvoices.filter((i) => i.status === "draft").length;
+  const paid = onlyInvoices.filter((i) => i.status === "paid").length;
+  const unpaidCount = onlyInvoices.filter((i) => i.status === "unpaid").length;
+  const overdueCount = onlyInvoices.filter((i) => i.status === "overdue").length;
   let revenue = 0;
   let vatTotal = 0;
   for (const i of invoices) {
-    if (i.status === "draft") continue;
-    const t = computeTotals(i.items);
-    revenue += t.total;
-    vatTotal += t.vat;
+    const t = signedTotals(i);
+    revenue = round2(revenue + t.total);
+    vatTotal = round2(vatTotal + t.vat);
   }
 
   const monthly = monthlySeries(invoices);
@@ -257,15 +265,24 @@ function Dashboard() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <div className="text-sm font-medium">{i.number}</div>
-                      <Badge variant="outline" className={statusColors[i.status]}>
-                        {i.status}
-                      </Badge>
+                      {isCreditNote(i) ? (
+                        <Badge variant="outline" className="border-primary/40 text-primary">
+                          credit note
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className={statusColors[i.status]}>
+                          {i.status}
+                        </Badge>
+                      )}
                     </div>
                     <div className="truncate text-xs text-muted-foreground">
                       {i.customerName} · Due {i.dueDate}
                     </div>
                   </div>
-                  <div className="text-sm font-semibold">{formatMoney(t.total, i.currency)}</div>
+                  <div className="text-sm font-semibold">
+                    {isCreditNote(i) ? "−" : ""}
+                    {formatMoney(t.total, i.currency)}
+                  </div>
                 </Link>
               );
             })}

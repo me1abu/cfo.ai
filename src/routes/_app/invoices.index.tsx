@@ -37,7 +37,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { formatMoney, computeTotals } from "@/lib/invoice-math";
+import { formatMoney, computeTotals, isCreditNote, isIssued } from "@/lib/invoice-math";
 import { invoicesQuery } from "@/lib/queries";
 import { deleteInvoice } from "@/server/invoices";
 import { Plus, Search, MoreHorizontal, ArrowUpDown } from "lucide-react";
@@ -75,9 +75,10 @@ function Invoices() {
 
   const remove = useMutation({
     mutationFn: (id: string) => deleteInvoice({ data: { id } }),
-    onSuccess: async () => {
+    onSuccess: async (res) => {
+      if (!res.ok) return toast.error(res.error);
       await queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      toast.success("Invoice deleted");
+      toast.success("Draft deleted");
     },
     onError: () => toast.error("Could not delete invoice"),
   });
@@ -201,16 +202,30 @@ function Invoices() {
                     className="cursor-pointer"
                     onClick={() => navigate({ to: "/invoices/$id", params: { id: i.id } })}
                   >
-                    <TableCell className="font-medium">{i.number}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        {i.number}
+                        {isCreditNote(i) && (
+                          <Badge variant="outline" className="border-primary/40 text-primary">
+                            Credit note
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>{i.customerName}</TableCell>
                     <TableCell>{i.date}</TableCell>
                     <TableCell>{i.dueDate}</TableCell>
                     <TableCell>
                       <Badge variant="outline" className={statusColors[i.status]}>
-                        {i.status}
+                        {isCreditNote(i) && i.status !== "draft"
+                          ? i.status === "paid"
+                            ? "settled"
+                            : "open"
+                          : i.status}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-semibold">
+                      {isCreditNote(i) ? "−" : ""}
                       {formatMoney(t.total, i.currency)}
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
@@ -234,30 +249,41 @@ function Invoices() {
                           >
                             Copy number
                           </DropdownMenuItem>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <DropdownMenuItem
-                                onSelect={(e) => e.preventDefault()}
-                                className="text-destructive"
-                              >
-                                Delete
-                              </DropdownMenuItem>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete invoice {i.number}?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This cannot be undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => remove.mutate(i.id)}>
+                          {isIssued(i) && !isCreditNote(i) && (
+                            <DropdownMenuItem
+                              onClick={() =>
+                                navigate({ to: "/credit-notes/new", search: { invoice: i.id } })
+                              }
+                            >
+                              Issue credit note
+                            </DropdownMenuItem>
+                          )}
+                          {!isIssued(i) && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <DropdownMenuItem
+                                  onSelect={(e) => e.preventDefault()}
+                                  className="text-destructive"
+                                >
                                   Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                                </DropdownMenuItem>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete draft {i.number}?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => remove.mutate(i.id)}>
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>

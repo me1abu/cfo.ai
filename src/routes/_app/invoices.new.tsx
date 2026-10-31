@@ -23,12 +23,20 @@ import {
 import { ZatcaQrCode } from "@/components/ZatcaQrCode";
 import { downloadQrPng, useInvoiceQr } from "@/lib/invoice-qr";
 import { parseZatcaQr, QR_TAG_LABELS } from "@/lib/zatca-qr";
-import { INVOICE_TITLES, invoiceKind, validateInvoice } from "@/lib/zatca-rules";
+import {
+  CREDIT_NOTE_REASONS,
+  documentTitle,
+  validateInvoice,
+  type OriginalInvoiceInfo,
+} from "@/lib/zatca-rules";
 import { ValidationReportView } from "@/components/ValidationReportView";
 import {
   computeTotals,
   formatMoney,
+  isCreditNote,
+  isIssued,
   lineSubtotal,
+  round2,
   nextInvoiceNumber,
   plusDaysISO,
   todayISO,
@@ -36,7 +44,7 @@ import {
   type InvoiceItem,
 } from "@/lib/invoice-math";
 import { companyQuery, customersQuery, invoiceQuery, invoicesQuery } from "@/lib/queries";
-import { saveInvoice } from "@/server/invoices";
+import { saveInvoice, setInvoiceStatus } from "@/server/invoices";
 import { getInvoicePdf } from "@/server/pdf";
 import { downloadBase64 } from "@/lib/download";
 import {
@@ -50,6 +58,8 @@ import {
   Mail,
   Printer,
   ArrowLeft,
+  Lock,
+  FileMinus2,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -77,6 +87,9 @@ function NewInvoice() {
   const initial = useMemo<Invoice>(
     () => ({
       id: "",
+      documentType: "invoice",
+      originalInvoiceId: null,
+      reason: "",
       number: nextInvoiceNumber(invoices),
       date: todayISO(),
       dueDate: plusDaysISO(30),
@@ -124,10 +137,37 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
   const [qrOpen, setQrOpen] = useState(false);
   const [validateOpen, setValidateOpen] = useState(false);
 
+  const { data: allDocs } = useSuspenseQuery(invoicesQuery());
+  const locked = isIssued(inv);
+  const credit = isCreditNote(inv);
+  const title = documentTitle(inv);
+  const noun = credit ? "credit note" : "invoice";
+
   const totals = useMemo(() => computeTotals(inv.items), [inv.items]);
+  const original = credit ? allDocs.find((d) => d.id === inv.originalInvoiceId) : undefined;
+  // Mirrors the server's check: original total minus other issued credit notes against it.
+  const originalInfo = useMemo<OriginalInvoiceInfo | null>(() => {
+    if (!original) return null;
+    const credited = allDocs
+      .filter((d) => d.originalInvoiceId === original.id && d.id !== inv.id && d.issuedAt)
+      .reduce((sum, d) => sum + computeTotals(d.items).total, 0);
+    return {
+      number: original.number,
+      date: original.date,
+      issued: original.issuedAt !== null,
+      documentType: original.documentType,
+      creditable: round2(computeTotals(original.items).total - credited),
+    };
+  }, [allDocs, original, inv.id]);
+  const relatedNotes = credit ? [] : allDocs.filter((d) => d.originalInvoiceId === inv.id);
+  const creditedSoFar = round2(
+    relatedNotes
+      .filter((n) => n.issuedAt)
+      .reduce((sum, n) => sum + computeTotals(n.items).total, 0),
+  );
   const report = useMemo(
-    () => (validateOpen ? validateInvoice(inv, company) : null),
-    [validateOpen, inv, company],
+    () => (validateOpen ? validateInvoice(inv, company, { original: originalInfo }) : null),
+    [validateOpen, inv, company, originalInfo],
   );
 
   const update = (patch: Partial<Invoice>) => setInv((prev) => ({ ...prev, ...patch }));
@@ -150,10 +190,11 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
           items: toSave.items.map(({ id: _id, ...rest }) => rest),
         },
       }),
-    onSuccess: async (res) => {
+    onSuccess: async (res, saved) => {
       if (!res.ok) return toast.error(res.error);
       await queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      toast.success(mode === "new" ? "Invoice created" : "Invoice saved");
+      const label = credit ? "Credit note" : "Invoice";
+      toast.success(saved.status === "draft" ? `${label} saved as draft` : `${label} issued`);
       if (mode === "new") {
         navigate({ to: "/invoices/$id", params: { id: res.id } });
       } else {
@@ -168,7 +209,24 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
     onError: (err) => toast.error(err instanceof Error ? err.message : "Could not save invoice"),
   });
 
+  const statusMutation = useMutation({
+    mutationFn: (status: "unpaid" | "paid" | "overdue") =>
+      setInvoiceStatus({ data: { id: inv.id, status } }),
+    onSuccess: async (res) => {
+      if (!res.ok) return toast.error(res.error);
+      await queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      const fresh = await queryClient.fetchQuery(invoiceQuery(inv.id));
+      if (fresh) {
+        setInv(fresh);
+        setSavedSnapshot(JSON.stringify(fresh));
+      }
+      toast.success("Payment status updated");
+    },
+    onError: () => toast.error("Could not update the status"),
+  });
+
   const save = (status?: Invoice["status"]) => {
+    if (credit && !inv.reason.trim()) return toast.error("State the reason for the credit note");
     if (!inv.customerName.trim()) return toast.error("Customer name is required");
     if (inv.items.every((i) => !i.description.trim())) return toast.error("Add at least one item");
     mutation.mutate(status ? { ...inv, status } : inv);
@@ -206,8 +264,22 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
   return (
     <div className="space-y-6">
       <PageHeader
-        title={mode === "new" ? "Create invoice" : `Edit ${inv.number}`}
-        subtitle="Fill the fields below or upload a document to auto-fill with AI"
+        title={
+          locked
+            ? `${title.en} ${inv.number}`
+            : mode === "new"
+              ? credit
+                ? "New credit note"
+                : "Create invoice"
+              : `Edit ${inv.number}`
+        }
+        subtitle={
+          locked
+            ? `Issued ${noun}. It can't be edited or deleted.`
+            : credit
+              ? `Credit note amending invoice ${original?.number ?? ""}`
+              : "Fill the fields below or upload a document to auto-fill with AI"
+        }
         actions={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" asChild>
@@ -215,9 +287,11 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
                 <ArrowLeft className="mr-1 h-4 w-4" /> Back
               </Link>
             </Button>
-            <Button variant="outline" onClick={() => save("draft")} disabled={busy}>
-              <Save className="mr-1 h-4 w-4" /> Save draft
-            </Button>
+            {!locked && (
+              <Button variant="outline" onClick={() => save("draft")} disabled={busy}>
+                <Save className="mr-1 h-4 w-4" /> Save draft
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setPreviewOpen(true)}>
               <Eye className="mr-1 h-4 w-4" /> Preview
             </Button>
@@ -227,27 +301,175 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
             <Button variant="outline" onClick={downloadPdf} disabled={pdfBusy}>
               <FileDown className="mr-1 h-4 w-4" /> {pdfBusy ? "Generating…" : "Download PDF"}
             </Button>
-            <Button onClick={() => save("unpaid")} disabled={busy}>
-              {busy ? "Saving…" : "Save & finalize"}
-            </Button>
+            {!locked && (
+              <Button onClick={() => save("unpaid")} disabled={busy} data-testid="issue">
+                {busy ? "Saving…" : `Save & issue ${noun}`}
+              </Button>
+            )}
+            {locked && !credit && (
+              <Button asChild data-testid="issue-credit-note">
+                <Link to="/credit-notes/new" search={{ invoice: inv.id }}>
+                  <FileMinus2 className="mr-1 h-4 w-4" /> Issue credit note
+                </Link>
+              </Button>
+            )}
           </div>
         }
       />
 
+      {locked && (
+        <Card className="border-primary/30 bg-primary/5 shadow-soft" data-testid="locked-banner">
+          <CardContent className="flex flex-wrap items-center justify-between gap-4 p-4">
+            <div className="flex items-start gap-3">
+              <Lock className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+              <div className="text-sm">
+                <div className="font-medium">
+                  Issued{" "}
+                  {inv.issuedAt
+                    ? new Date(inv.issuedAt).toLocaleString("en-GB", { timeZone: "Asia/Riyadh" })
+                    : ""}{" "}
+                  (Riyadh time)
+                </div>
+                <div className="text-muted-foreground">
+                  {credit
+                    ? "Issued credit notes are final. Record when the credit has been refunded or applied."
+                    : "Issued invoices can't be edited or deleted. To correct one, issue a credit note for the amount to reduce."}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs text-muted-foreground">Payment status</Label>
+              <Select
+                value={inv.status}
+                onValueChange={(v) => statusMutation.mutate(v as "unpaid" | "paid" | "overdue")}
+                disabled={statusMutation.isPending}
+              >
+                <SelectTrigger className="w-40" data-testid="payment-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unpaid">{credit ? "Open" : "Unpaid"}</SelectItem>
+                  <SelectItem value="paid">{credit ? "Settled" : "Paid"}</SelectItem>
+                  {!credit && <SelectItem value="overdue">Overdue</SelectItem>}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {credit && (
+        <Card className="shadow-soft">
+          <CardContent className="space-y-1 p-4 text-sm" data-testid="credit-original">
+            {original ? (
+              <>
+                <div>
+                  Amends invoice{" "}
+                  <Link
+                    to="/invoices/$id"
+                    params={{ id: original.id }}
+                    className="font-medium text-primary"
+                  >
+                    {original.number}
+                  </Link>{" "}
+                  issued {original.date}, total{" "}
+                  {formatMoney(computeTotals(original.items).total, original.currency)}.
+                </div>
+                {!locked && originalInfo && (
+                  <div className="text-muted-foreground">
+                    Still creditable: {formatMoney(originalInfo.creditable, original.currency)}.
+                    Customer and currency come from the original invoice.
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-destructive">The original invoice could not be found.</div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {relatedNotes.length > 0 && (
+        <Card className="shadow-soft" data-testid="related-credit-notes">
+          <CardHeader>
+            <CardTitle className="text-base">Credit notes against this invoice</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {relatedNotes.map((n) => (
+              <div key={n.id} className="flex items-center justify-between gap-3">
+                <Link to="/invoices/$id" params={{ id: n.id }} className="font-medium text-primary">
+                  {n.number}
+                </Link>
+                <span className="text-muted-foreground">{n.issuedAt ? n.date : "draft"}</span>
+                <span className="font-medium">
+                  −{formatMoney(computeTotals(n.items).total, n.currency)}
+                </span>
+              </div>
+            ))}
+            <div className="flex justify-between border-t pt-2 font-medium">
+              <span>Net after issued credit notes</span>
+              <span>{formatMoney(round2(totals.total - creditedSoFar), inv.currency)}</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-6">
+        <fieldset disabled={locked} className="m-0 min-w-0 space-y-6 border-0 p-0 lg:col-span-2">
+          {credit && (
+            <Card className="shadow-soft">
+              <CardHeader>
+                <CardTitle className="text-base">Reason for the credit note</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {!locked && (
+                  <Select value="" onValueChange={(v) => update({ reason: v })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a reason allowed by ZATCA…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CREDIT_NOTE_REASONS.map((r) => (
+                        <SelectItem key={r} value={r}>
+                          {r}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Textarea
+                  rows={2}
+                  placeholder="Reason shown on the credit note"
+                  value={inv.reason}
+                  onChange={(e) => update({ reason: e.target.value })}
+                  data-testid="credit-reason"
+                />
+                {!locked && (
+                  <p className="text-xs text-muted-foreground">
+                    Credit notes can't be used for adjustments unrelated to a supply, and must be
+                    issued by the 15th of the month after the event that requires them.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
           <Card className="shadow-soft">
             <CardHeader>
-              <CardTitle className="text-base">Invoice details</CardTitle>
+              <CardTitle className="text-base">
+                {credit ? "Credit note details" : "Invoice details"}
+              </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label>Invoice number</Label>
+                <Label>{credit ? "Credit note number" : "Invoice number"}</Label>
                 <Input value={inv.number} onChange={(e) => update({ number: e.target.value })} />
               </div>
               <div className="space-y-1.5">
                 <Label>Currency</Label>
-                <Select value={inv.currency} onValueChange={(v) => update({ currency: v })}>
+                <Select
+                  value={inv.currency}
+                  onValueChange={(v) => update({ currency: v })}
+                  disabled={credit}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -261,21 +483,23 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Invoice date</Label>
+                <Label>{credit ? "Credit note date" : "Invoice date"}</Label>
                 <Input
                   type="date"
                   value={inv.date}
                   onChange={(e) => update({ date: e.target.value })}
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label>Due date</Label>
-                <Input
-                  type="date"
-                  value={inv.dueDate}
-                  onChange={(e) => update({ dueDate: e.target.value })}
-                />
-              </div>
+              {!credit && (
+                <div className="space-y-1.5">
+                  <Label>Due date</Label>
+                  <Input
+                    type="date"
+                    value={inv.dueDate}
+                    onChange={(e) => update({ dueDate: e.target.value })}
+                  />
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label>Template</Label>
                 <Select
@@ -294,24 +518,6 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5">
-                <Label>Status</Label>
-                <Select
-                  value={inv.status}
-                  onValueChange={(v) => update({ status: v as Invoice["status"] })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {["draft", "unpaid", "paid", "overdue"].map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </CardContent>
           </Card>
 
@@ -319,59 +525,63 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
             <CardHeader>
               <CardTitle className="text-base">Customer</CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label>Select existing customer</Label>
-                <Select value={inv.customerId ?? ""} onValueChange={pickCustomer}>
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={
-                        customers.length
-                          ? "Or fill fields below manually…"
-                          : "No customers yet — fill fields below"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {customers.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Customer name</Label>
-                <Input
-                  value={inv.customerName}
-                  onChange={(e) => update({ customerName: e.target.value })}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>VAT number</Label>
-                <Input
-                  value={inv.customerVat}
-                  onChange={(e) => update({ customerVat: e.target.value })}
-                  placeholder="15 digits"
-                />
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label>Address</Label>
-                <Textarea
-                  value={inv.customerAddress}
-                  onChange={(e) => update({ customerAddress: e.target.value })}
-                />
-              </div>
-            </CardContent>
+            <fieldset disabled={credit} className="m-0 min-w-0 border-0 p-0">
+              <CardContent className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Select existing customer</Label>
+                  <Select value={inv.customerId ?? ""} onValueChange={pickCustomer}>
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={
+                          customers.length
+                            ? "Or fill fields below manually…"
+                            : "No customers yet — fill fields below"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {customers.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Customer name</Label>
+                  <Input
+                    value={inv.customerName}
+                    onChange={(e) => update({ customerName: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>VAT number</Label>
+                  <Input
+                    value={inv.customerVat}
+                    onChange={(e) => update({ customerVat: e.target.value })}
+                    placeholder="15 digits"
+                  />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Address</Label>
+                  <Textarea
+                    value={inv.customerAddress}
+                    onChange={(e) => update({ customerAddress: e.target.value })}
+                  />
+                </div>
+              </CardContent>
+            </fieldset>
           </Card>
 
           <Card className="shadow-soft">
             <CardHeader className="flex-row items-center justify-between">
               <CardTitle className="text-base">Items</CardTitle>
-              <Button variant="outline" size="sm" onClick={addItem}>
-                <Plus className="mr-1 h-4 w-4" /> Add row
-              </Button>
+              {!locked && (
+                <Button variant="outline" size="sm" onClick={addItem}>
+                  <Plus className="mr-1 h-4 w-4" /> Add row
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -465,7 +675,7 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
               />
             </CardContent>
           </Card>
-        </div>
+        </fieldset>
 
         <div className="space-y-6">
           <Card className="shadow-soft sticky top-20">
@@ -482,7 +692,7 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
                 <span>{formatMoney(totals.vat, inv.currency)}</span>
               </div>
               <div className="mt-2 border-t pt-2 flex justify-between text-base font-semibold">
-                <span>Grand total</span>
+                <span>{credit ? "Total credit" : "Grand total"}</span>
                 <span>{formatMoney(totals.total, inv.currency)}</span>
               </div>
               <div className="pt-4 space-y-2">
@@ -600,7 +810,7 @@ export function InvoiceRender({
   const { data: company } = useSuspenseQuery(companyQuery());
   const qr = useInvoiceQr(inv, company);
   const bilingual = inv.template === "bilingual" || inv.template === "arabic";
-  const title = INVOICE_TITLES[invoiceKind(inv)];
+  const title = documentTitle(inv);
   return (
     <div className="rounded-lg border bg-white p-8 text-sm text-neutral-900">
       <div className="flex items-start justify-between border-b pb-4">

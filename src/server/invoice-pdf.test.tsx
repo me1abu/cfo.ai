@@ -21,6 +21,9 @@ const company: Company = {
 
 const invoice: Invoice = {
   id: "11111111-1111-1111-1111-111111111111",
+  documentType: "invoice",
+  originalInvoiceId: null,
+  reason: "",
   number: "INV-2026-1001",
   date: "2026-10-27",
   dueDate: "2026-11-26",
@@ -94,5 +97,62 @@ describe("invoice PDF", () => {
     expect(text).toContain("DRAFT");
     expect(text).toContain("SIMPLIFIED TAX INVOICE");
     expect(text).toContain("QR code unavailable");
+  });
+});
+
+describe("credit note PDF", () => {
+  it("shows the credit note title, reference to the original invoice, reason and total", async () => {
+    const note: Invoice = {
+      ...invoice,
+      id: "22222222-2222-2222-2222-222222222222",
+      documentType: "credit_note",
+      originalInvoiceId: invoice.id,
+      reason: "Goods or services returned and accepted by the supplier",
+      number: "CN-2026-1001",
+      date: "2026-10-28",
+      items: [invoice.items[0]],
+      issuedAt: "2026-10-28T09:00:00Z",
+    };
+    const buf = await renderInvoicePdf(note, company, {
+      number: "INV-2026-1001",
+      date: "2026-10-27",
+    });
+    writeFileSync("test-output/credit-note-sample.pdf", buf);
+    const { text } = await pdfText(buf);
+    expect(text).toContain("CREDIT NOTE");
+    expect(text).toContain("CN-2026-1001");
+    // pdf.js adds spaces inside parentheses when extracting.
+    expect(text).toMatch(
+      /relates to invoice number \(\s*INV-2026-1001\s*\), issued on\s+27\/10\/2026/,
+    );
+    expect(text).toContain("returned and accepted");
+    expect(text).toContain("Total credit amount");
+    // 40 x 450 = 18,000 + 15% VAT = 20,700
+    expect(text).toContain("20,700.00");
+    expect(text).not.toContain("Payment due date");
+  });
+});
+
+describe("repeated renders (regression)", () => {
+  // react-pdf reused parsed fonts across documents and dropped glyphs in later renders:
+  // every word-initial "ه" vanished from the second PDF in a process ("هيئة" became "يئة").
+  it("keeps every letter in later and concurrent renders", async () => {
+    const withHeh = (n: string): Invoice => ({
+      ...invoice,
+      number: n,
+      customerName: "هيئة الزكاة",
+      customerVat: "",
+      items: [{ ...invoice.items[0], description: "هاتف محمول" }],
+    });
+    await renderInvoicePdf({ ...invoice, customerName: "شركة الراجحي" }, company);
+    const [a, b] = await Promise.all([
+      renderInvoicePdf(withHeh("INV-2026-2001"), company),
+      renderInvoicePdf(withHeh("INV-2026-2002"), company),
+    ]);
+    for (const buf of [a, b]) {
+      const { text } = await pdfText(buf);
+      expect(text).toContain("هيئة");
+      expect(text).toContain("هاتف");
+    }
   });
 });
