@@ -25,9 +25,10 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { signOut } from "@/server/auth";
+import { askAssistant } from "@/server/ai";
 import { settingsQuery } from "@/lib/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -124,36 +125,58 @@ function SideNav({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+type ChatMessage = { role: "user" | "assistant"; content: string };
+
+const GREETING =
+  "Hi! Ask me about your invoices, customers, revenue or VAT. For example: which invoices are overdue, or how much VAT you collected this month. I can look things up but can't change anything.";
+
+const SUGGESTIONS = [
+  "Which invoices are unpaid or overdue?",
+  "How much VAT did I collect this month?",
+  "Who are my biggest customers?",
+  "Do any of my invoices have validation problems?",
+];
+
 function AssistantPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [messages, setMessages] = useState<{ role: "user" | "ai"; text: string }[]>([
-    {
-      role: "ai",
-      text: "Hello! I'm your AI Invoice assistant. Ask me to create an invoice, extract customer info, or verify a VAT calculation.",
-    },
-  ]);
+  // The greeting is shown but never sent: the conversation sent to the server starts with the user.
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const send = (t?: string) => {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, busy, error]);
+
+  const send = async (t?: string) => {
     const text = (t ?? input).trim();
-    if (!text) return;
-    setMessages((m) => [...m, { role: "user", text }]);
+    if (!text || busy) return;
+    const next: ChatMessage[] = [...messages, { role: "user", content: text.slice(0, 4000) }];
+    setMessages(next);
     setInput("");
-    setTimeout(() => {
-      let reply = "Got it. I've prepared a suggestion in the invoice editor.";
-      if (/vat/i.test(text))
-        reply =
-          "The standard KSA VAT rate is 15%. On subtotal SAR 10,000 the VAT is SAR 1,500 → total SAR 11,500.";
-      else if (/customer/i.test(text))
-        reply =
-          "Extracted customer: Al Rajhi Trading Co., VAT 300123456700003, King Fahd Rd, Riyadh.";
-      else if (/summar/i.test(text))
-        reply =
-          "Invoice summary: 2 line items, subtotal SAR 30,000, VAT SAR 4,500, total SAR 34,500. Due in 30 days.";
-      setMessages((m) => [...m, { role: "ai", text: reply }]);
-    }, 600);
+    setError(null);
+    setBusy(true);
+    try {
+      // The server accepts the last 20 turns; it must start with a user turn.
+      let history = next.slice(-20);
+      while (history.length && history[0].role !== "user") history = history.slice(1);
+      const res = await askAssistant({ data: { messages: history } });
+      if (res.ok) setMessages((m) => [...m, { role: "assistant", content: res.reply }]);
+      else setError(res.error);
+    } catch {
+      setError("Couldn't reach the assistant. Please try again.");
+    } finally {
+      setBusy(false);
+    }
   };
+
   if (!open) return null;
   return (
-    <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l bg-card shadow-2xl">
+    <div
+      className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l bg-card shadow-2xl"
+      data-testid="assistant-panel"
+    >
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="grid h-8 w-8 place-items-center rounded-lg bg-primary/10 text-primary">
@@ -161,51 +184,86 @@ function AssistantPanel({ open, onClose }: { open: boolean; onClose: () => void 
           </div>
           <div>
             <div className="text-sm font-semibold">AI Assistant</div>
-            <div className="text-xs text-muted-foreground">Powered by AI Invoice</div>
+            <div className="text-xs text-muted-foreground">Answers from your own data</div>
           </div>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {messages.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setMessages([]);
+                setError(null);
+              }}
+              disabled={busy}
+            >
+              New chat
+            </Button>
+          )}
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
-      <div className="flex-1 space-y-3 overflow-y-auto p-4">
+      <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-4">
+        <div className="max-w-[85%] rounded-2xl bg-muted px-3 py-2 text-sm">{GREETING}</div>
         {messages.map((m, i) => (
           <div
             key={i}
+            dir="auto"
+            data-role={m.role}
             className={cn(
-              "max-w-[85%] rounded-2xl px-3 py-2 text-sm",
+              "max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm",
               m.role === "user" ? "ml-auto bg-primary text-primary-foreground" : "bg-muted",
             )}
           >
-            {m.text}
+            {m.content}
           </div>
         ))}
+        {busy && (
+          <div className="max-w-[85%] animate-pulse rounded-2xl bg-muted px-3 py-2 text-sm text-muted-foreground">
+            Looking that up…
+          </div>
+        )}
+        {error && (
+          <div
+            className="max-w-[85%] rounded-2xl border border-destructive/40 px-3 py-2 text-sm text-destructive"
+            data-testid="assistant-error"
+          >
+            {error}
+          </div>
+        )}
       </div>
       <div className="border-t p-3">
-        <div className="mb-2 flex flex-wrap gap-1.5">
-          {[
-            "Create an invoice from this document.",
-            "Extract customer information.",
-            "Check VAT calculation.",
-            "Summarize this invoice.",
-          ].map((p) => (
-            <button
-              key={p}
-              onClick={() => send(p)}
-              className="rounded-full border bg-background px-3 py-1 text-xs hover:bg-accent"
-            >
-              {p}
-            </button>
-          ))}
-        </div>
+        {messages.length === 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {SUGGESTIONS.map((p) => (
+              <button
+                key={p}
+                onClick={() => send(p)}
+                disabled={busy}
+                className="rounded-full border bg-background px-3 py-1 text-xs hover:bg-accent"
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex gap-2">
           <Input
             value={input}
+            dir="auto"
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
-            placeholder="Ask the AI assistant…"
+            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
+            placeholder="Ask about your invoices…"
+            maxLength={4000}
+            disabled={busy}
+            data-testid="assistant-input"
           />
-          <Button onClick={() => send()}>Send</Button>
+          <Button onClick={() => send()} disabled={busy || !input.trim()}>
+            Send
+          </Button>
         </div>
       </div>
     </div>

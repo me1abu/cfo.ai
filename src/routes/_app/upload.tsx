@@ -1,22 +1,30 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/AppLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import {
   UploadCloud,
   FileText,
   ImageIcon,
-  FileSpreadsheet,
   Sparkles,
-  CheckCircle2,
   ArrowRight,
+  AlertTriangle,
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { companyQuery, invoicesQuery } from "@/lib/queries";
-import { nextInvoiceNumber } from "@/lib/invoice-math";
+import {
+  computeTotals,
+  formatMoney,
+  lineSubtotal,
+  nextInvoiceNumber,
+  todayISO,
+  type Invoice,
+} from "@/lib/invoice-math";
+import { extractionToInvoice, type Extraction } from "@/lib/extraction";
+import { ACCEPT_ATTRIBUTE, readDocumentFile } from "@/lib/file-upload";
+import { extractDocument } from "@/server/ai";
 import { saveInvoice } from "@/server/invoices";
 
 export const Route = createFileRoute("/_app/upload")({
@@ -28,32 +36,21 @@ export const Route = createFileRoute("/_app/upload")({
   head: () => ({
     meta: [
       { title: "AI Upload · AI Invoice Saudi" },
-      { name: "description", content: "Upload documents and extract invoice data with AI." },
+      { name: "description", content: "Turn a document into a draft invoice with AI." },
     ],
   }),
   component: UploadPage,
 });
 
-const stages = [
-  { label: "Uploading…", ms: 700 },
-  { label: "Reading document…", ms: 900 },
-  { label: "AI extracting invoice information…", ms: 1400 },
-  { label: "Extraction complete.", ms: 400 },
-];
+type Phase =
+  | { kind: "idle" }
+  | { kind: "reading"; fileName: string }
+  | { kind: "error"; fileName?: string; message: string }
+  | { kind: "done"; fileName: string; extraction: Extraction };
 
 function UploadPage() {
-  const [file, setFile] = useState<File | null>(null);
-  const [stage, setStage] = useState(-1);
-  const [progress, setProgress] = useState(0);
-  const [extracted, setExtracted] = useState<null | {
-    number: string;
-    date: string;
-    dueDate: string;
-    customerName: string;
-    customerVat: string;
-    customerAddress: string;
-    items: { description: string; quantity: number; unitPrice: number }[];
-  }>(null);
+  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  const [draft, setDraft] = useState<Invoice | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dragRef = useRef<HTMLDivElement>(null);
   const { data: company } = useSuspenseQuery(companyQuery());
@@ -61,77 +58,76 @@ function UploadPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const handleFile = (f: File) => {
-    setFile(f);
-    setExtracted(null);
-    setStage(0);
-    setProgress(5);
-    let elapsed = 0;
-    stages.forEach((st, idx) => {
-      elapsed += st.ms;
-      setTimeout(() => {
-        setStage(idx);
-        setProgress(Math.round(((idx + 1) / stages.length) * 100));
-        if (idx === stages.length - 1) {
-          setExtracted({
-            number: `INV-AI-${Math.floor(Math.random() * 9000 + 1000)}`,
-            date: new Date().toISOString().slice(0, 10),
-            dueDate: new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10),
-            customerName: "Al Rajhi Trading Co.",
-            customerVat: "300123456700003",
-            customerAddress: "King Fahd Rd, Riyadh 12345",
-            items: [
-              { description: "Consulting services", quantity: 20, unitPrice: 450 },
-              { description: "Software license", quantity: 1, unitPrice: 8500 },
-            ],
-          });
-        }
-      }, elapsed);
-    });
+  const handleFile = async (f: File) => {
+    setDraft(null);
+    const read = await readDocumentFile(f);
+    if (!read.ok) return setPhase({ kind: "error", fileName: f.name, message: read.error });
+    setPhase({ kind: "reading", fileName: f.name });
+    try {
+      const res = await extractDocument({ data: read });
+      if (!res.ok) return setPhase({ kind: "error", fileName: f.name, message: res.error });
+      setPhase({ kind: "done", fileName: f.name, extraction: res.extraction });
+      setDraft(
+        extractionToInvoice(res.extraction, {
+          currency: company.currency,
+          vatRate: company.vatRate,
+          today: todayISO(),
+        }),
+      );
+    } catch {
+      setPhase({ kind: "error", fileName: f.name, message: "Upload failed. Please try again." });
+    }
   };
 
   const create = useMutation({
-    mutationFn: () =>
+    mutationFn: (inv: Invoice) =>
       saveInvoice({
         data: {
-          number: extracted!.number || nextInvoiceNumber(invoices),
-          date: extracted!.date,
-          dueDate: extracted!.dueDate,
-          customerId: null,
-          customerName: extracted!.customerName,
-          customerVat: extracted!.customerVat,
-          customerAddress: extracted!.customerAddress,
-          currency: company.currency,
-          items: extracted!.items.map((it) => ({
-            description: it.description,
-            quantity: it.quantity,
-            unitPrice: it.unitPrice,
-            discount: 0,
-            vatRate: company.vatRate,
-          })),
-          status: "draft",
+          ...inv,
+          id: undefined,
+          // The draft is an invoice from your business, so it takes your next number.
+          number: nextInvoiceNumber(invoices),
           template: "bilingual",
-          notes: "",
+          status: "draft",
+          items: inv.items.map(({ id: _id, ...rest }) => rest),
         },
       }),
     onSuccess: async (res) => {
       if (!res.ok) return toast.error(res.error);
       await queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      toast.success("Draft invoice created from document");
+      toast.success("Draft invoice created from the document");
       navigate({ to: "/invoices/$id", params: { id: res.id } });
     },
     onError: () => toast.error("Could not create the draft"),
   });
-  const createFromExtracted = () => {
-    if (!extracted) return;
-    create.mutate();
+
+  const extraction = phase.kind === "done" ? phase.extraction : null;
+  const sellerVat = extraction?.seller.vatNumber?.replace(/\s+/g, "") ?? "";
+  const issuedBySomeoneElse =
+    !!extraction?.seller.name && !!sellerVat && sellerVat !== company.vatNumber;
+  const totals = draft ? computeTotals(draft.items) : null;
+
+  const createDraft = () => {
+    if (!draft || !extraction) return;
+    if (!draft.customerName.trim()) return toast.error("Add the customer's name first");
+    if (draft.items.length === 0) return toast.error("No line items were found in the document");
+    const source = [
+      extraction.invoiceNumber && `document ${extraction.invoiceNumber}`,
+      extraction.seller.name && `from ${extraction.seller.name}`,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    create.mutate({
+      ...draft,
+      notes: [draft.notes, source && `Created from ${source}.`].filter(Boolean).join("\n"),
+    });
   };
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="AI Upload"
-        subtitle="Upload PDF, image, Word or Excel documents. Our AI extracts invoice fields for review."
+        subtitle="Turn a purchase order, quotation or customer request into a draft invoice. AI reads the document; you review everything before it's saved."
       />
 
       <Card className="shadow-soft">
@@ -149,7 +145,7 @@ function UploadPage() {
               const f = e.dataTransfer.files?.[0];
               if (f) handleFile(f);
             }}
-            onClick={() => inputRef.current?.click()}
+            onClick={() => phase.kind !== "reading" && inputRef.current?.click()}
             className="grid cursor-pointer place-items-center rounded-2xl border-2 border-dashed border-border p-10 text-center transition-colors hover:border-primary hover:bg-primary/5"
           >
             <div className="grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary">
@@ -158,17 +154,17 @@ function UploadPage() {
             <div className="mt-4 text-base font-medium">
               Drag & drop a document, or click to browse
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              Supports PDF, JPG, PNG, DOCX, XLSX · up to 25 MB
-            </div>
+            <div className="mt-1 text-xs text-muted-foreground">PDF or image, up to 3 MB</div>
             <input
               ref={inputRef}
               type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+              accept={ACCEPT_ATTRIBUTE}
               className="hidden"
+              data-testid="upload-input"
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) handleFile(f);
+                e.target.value = "";
               }}
             />
             <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs text-muted-foreground">
@@ -176,123 +172,166 @@ function UploadPage() {
                 <FileText className="h-3.5 w-3.5" /> PDF
               </span>
               <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-3 py-1">
-                <ImageIcon className="h-3.5 w-3.5" /> Image
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-3 py-1">
-                <FileText className="h-3.5 w-3.5" /> Word
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-3 py-1">
-                <FileSpreadsheet className="h-3.5 w-3.5" /> Excel
+                <ImageIcon className="h-3.5 w-3.5" /> Photo or scan
               </span>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {file && (
+      {phase.kind === "reading" && (
         <Card className="shadow-soft">
-          <CardContent className="p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm font-medium truncate">{file.name}</div>
-                <div className="text-xs text-muted-foreground">
-                  {(file.size / 1024).toFixed(1)} KB
-                </div>
+          <CardContent className="flex items-center gap-3 p-6" data-testid="upload-reading">
+            <Sparkles className="h-5 w-5 animate-pulse text-primary" />
+            <div>
+              <div className="text-sm font-medium">Reading {phase.fileName}…</div>
+              <div className="text-xs text-muted-foreground">
+                This usually takes 10 to 60 seconds.
               </div>
             </div>
-            <Progress value={progress} />
-            <ul className="space-y-1 text-sm">
-              {stages.map((st, i) => (
-                <li
-                  key={i}
-                  className={`flex items-center gap-2 ${i <= stage ? "text-foreground" : "text-muted-foreground"}`}
-                >
-                  {i < stage || (i === stages.length - 1 && stage === i) ? (
-                    <CheckCircle2 className="h-4 w-4 text-success" />
-                  ) : i === stage ? (
-                    <div className="h-3 w-3 animate-pulse rounded-full bg-primary" />
-                  ) : (
-                    <div className="h-3 w-3 rounded-full border" />
-                  )}
-                  {st.label}
-                </li>
-              ))}
-            </ul>
           </CardContent>
         </Card>
       )}
 
-      {extracted && (
+      {phase.kind === "error" && (
+        <Card className="border-destructive/40 shadow-soft">
+          <CardContent className="flex items-start gap-3 p-6 text-sm" data-testid="upload-error">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+            <div>
+              {phase.fileName && <div className="font-medium">{phase.fileName}</div>}
+              <div className="text-muted-foreground">{phase.message}</div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {extraction && draft && (
         <Card className="shadow-soft">
-          <CardContent className="p-6 space-y-4">
-            <div className="flex items-center justify-between">
+          <CardContent className="space-y-4 p-6" data-testid="upload-result">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="text-base font-semibold">Extracted information</div>
+                <div className="text-base font-semibold">Review the extracted details</div>
                 <div className="text-xs text-muted-foreground">
-                  Review the fields, then create an editable draft.
+                  Check every field. The draft opens in the editor, where you can change anything
+                  before issuing.
                 </div>
               </div>
-              <Button onClick={createFromExtracted}>
-                Open in editor <ArrowRight className="ml-1 h-4 w-4" />
+              <Button onClick={createDraft} disabled={create.isPending}>
+                {create.isPending ? "Creating…" : "Create draft invoice"}
+                <ArrowRight className="ml-1 h-4 w-4" />
               </Button>
             </div>
+
+            {(issuedBySomeoneElse || !extraction.isInvoice || extraction.warnings.length > 0) && (
+              <ul className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-3 text-xs">
+                {issuedBySomeoneElse && (
+                  <li>
+                    This document was issued by <b>{extraction.seller.name}</b>. If it's a supplier
+                    invoice you received, check it on the{" "}
+                    <Link to="/validation" className="font-medium text-primary">
+                      Validation page
+                    </Link>{" "}
+                    instead.
+                  </li>
+                )}
+                {!extraction.isInvoice && (
+                  <li>Document type: {extraction.documentKind.replace(/_/g, " ")}.</li>
+                )}
+                {extraction.warnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            )}
+
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
-                label="Invoice number"
-                value={extracted.number}
-                onChange={(v) => setExtracted({ ...extracted, number: v })}
+                label="Customer"
+                value={draft.customerName}
+                onChange={(v) => setDraft({ ...draft, customerName: v })}
               />
               <Field
-                label="Customer"
-                value={extracted.customerName}
-                onChange={(v) => setExtracted({ ...extracted, customerName: v })}
+                label="Customer VAT number"
+                value={draft.customerVat}
+                onChange={(v) => setDraft({ ...draft, customerVat: v })}
               />
               <Field
                 label="Invoice date"
-                value={extracted.date}
-                onChange={(v) => setExtracted({ ...extracted, date: v })}
                 type="date"
+                value={draft.date}
+                onChange={(v) => setDraft({ ...draft, date: v })}
               />
               <Field
                 label="Due date"
-                value={extracted.dueDate}
-                onChange={(v) => setExtracted({ ...extracted, dueDate: v })}
                 type="date"
+                value={draft.dueDate}
+                onChange={(v) => setDraft({ ...draft, dueDate: v })}
               />
-              <Field
-                label="VAT number"
-                value={extracted.customerVat}
-                onChange={(v) => setExtracted({ ...extracted, customerVat: v })}
-              />
-              <Field
-                label="Address"
-                value={extracted.customerAddress}
-                onChange={(v) => setExtracted({ ...extracted, customerAddress: v })}
-              />
+              <div className="sm:col-span-2">
+                <Field
+                  label="Customer address"
+                  value={draft.customerAddress}
+                  onChange={(v) => setDraft({ ...draft, customerAddress: v })}
+                />
+              </div>
             </div>
-            <div className="rounded-lg border">
+
+            <div className="overflow-x-auto rounded-lg border">
               <table className="w-full text-sm">
                 <thead className="bg-muted text-xs text-muted-foreground">
                   <tr>
                     <th className="p-2 text-left">Description</th>
-                    <th className="p-2">Qty</th>
+                    <th className="p-2 text-right">Qty</th>
                     <th className="p-2 text-right">Unit price</th>
+                    <th className="p-2 text-right">Discount</th>
+                    <th className="p-2 text-right">VAT %</th>
+                    <th className="p-2 text-right">Subtotal</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {extracted.items.map((it, i) => (
-                    <tr key={i} className="border-t">
+                  {draft.items.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="p-4 text-center text-muted-foreground">
+                        No line items found.
+                      </td>
+                    </tr>
+                  )}
+                  {draft.items.map((it) => (
+                    <tr key={it.id} className="border-t">
                       <td className="p-2">{it.description}</td>
-                      <td className="p-2 text-center">{it.quantity}</td>
+                      <td className="p-2 text-right">{it.quantity}</td>
                       <td className="p-2 text-right">{it.unitPrice.toFixed(2)}</td>
+                      <td className="p-2 text-right">{it.discount.toFixed(2)}</td>
+                      <td className="p-2 text-right">{it.vatRate}%</td>
+                      <td className="p-2 text-right">{lineSubtotal(it).toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+
+            {totals && (
+              <div className="ml-auto w-full max-w-xs space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span>{formatMoney(totals.subtotal, draft.currency)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">VAT</span>
+                  <span>{formatMoney(totals.vat, draft.currency)}</span>
+                </div>
+                <div className="flex justify-between border-t pt-1 font-semibold">
+                  <span>Total</span>
+                  <span>{formatMoney(totals.total, draft.currency)}</span>
+                </div>
+                {extraction.statedTotals.total !== null &&
+                  Math.abs(extraction.statedTotals.total - totals.total) > 0.01 && (
+                    <div className="text-xs text-warning-foreground">
+                      The document's printed total is{" "}
+                      {formatMoney(extraction.statedTotals.total, draft.currency)}.
+                    </div>
+                  )}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

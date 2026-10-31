@@ -476,3 +476,23 @@ export function validateInvoice(
   for (const c of checks) counts[c.status]++;
   return { kind, title: documentTitle(inv), checks, counts, ready: counts.fail === 0 };
 }
+
+/**
+ * What the validator needs about the invoice a credit note amends, computed from the loaded
+ * documents: the original's total minus other issued credit notes against it.
+ */
+export function originalInfoFromDocs(inv: Invoice, docs: Invoice[]): OriginalInvoiceInfo | null {
+  if (inv.documentType !== "credit_note" || !inv.originalInvoiceId) return null;
+  const original = docs.find((d) => d.id === inv.originalInvoiceId);
+  if (!original) return null;
+  const credited = docs
+    .filter((d) => d.originalInvoiceId === original.id && d.id !== inv.id && d.issuedAt)
+    .reduce((sum, d) => sum + computeTotals(d.items).total, 0);
+  return {
+    number: original.number,
+    date: original.date,
+    issued: original.issuedAt !== null,
+    documentType: original.documentType,
+    creditable: Math.round((computeTotals(original.items).total - credited) * 100) / 100,
+  };
+}
