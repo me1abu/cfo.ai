@@ -77,7 +77,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "AI Invoice Saudi — ZATCA-ready invoicing" },
+      { title: "AI Invoice Saudi — Saudi VAT invoicing" },
       {
         name: "description",
         content: "AI-powered invoice generation, validation and QR for Saudi Arabian businesses.",

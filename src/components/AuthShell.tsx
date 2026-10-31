@@ -35,20 +35,20 @@ export function AuthShell({
       <div className="hidden bg-gradient-to-br from-primary/95 via-primary to-primary/80 p-10 text-primary-foreground lg:flex lg:flex-col lg:justify-between">
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium backdrop-blur">
-            <Sparkles className="h-3.5 w-3.5" /> ZATCA-ready e-invoicing
+            <Sparkles className="h-3.5 w-3.5" /> ZATCA Phase 1 e-invoicing
           </div>
           <h2 className="mt-6 max-w-md text-3xl font-semibold leading-tight">
-            Turn any document into a compliant Saudi invoice — instantly.
+            Bilingual Saudi tax invoices, checked before you send them.
           </h2>
           <p className="mt-3 max-w-md text-sm text-primary-foreground/80">
-            Upload PDFs, images, or scans. Our AI extracts fields, verifies VAT at 15%, and
-            generates a QR code your accountants can trust.
+            Create invoices in Arabic and English with the Phase 1 QR code, or upload a PDF or photo
+            and let AI fill in the details for you to review.
           </p>
         </div>
         <div className="grid gap-3 max-w-md">
           {[
             "AI-extracted fields with editable review",
-            "VAT & totals validated to KSA rules",
+            "Checked against ZATCA's invoice rules",
             "Bilingual Arabic / English templates",
           ].map((t) => (
             <div key={t} className="rounded-xl bg-white/10 px-4 py-3 text-sm backdrop-blur">

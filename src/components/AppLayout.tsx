@@ -66,7 +66,7 @@ function Brand() {
       </div>
       <div className="leading-tight">
         <div className="text-sm font-semibold tracking-tight">AI Invoice</div>
-        <div className="text-[11px] text-muted-foreground">Saudi Arabia · ZATCA-ready</div>
+        <div className="text-[11px] text-muted-foreground">Saudi Arabia · ZATCA Phase 1</div>
       </div>
     </Link>
   );
