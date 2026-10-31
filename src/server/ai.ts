@@ -13,6 +13,31 @@ import {
   extractInvoiceData,
 } from "./ai/extract.server";
 import { AssistantRefusedError, runAssistant } from "./ai/assistant.server";
+import { AiLimitReachedError, reserveAiCall, type AiKind } from "./ai/usage.server";
+import { riyadhTodayISO } from "@/lib/invoice-math";
+
+/**
+ * Runs an AI call against the organisation's daily allowance. The unit is given back when the
+ * call fails before Claude did any work (not configured, network, rate limit, server error);
+ * refusals and unreadable documents still count, since they were processed.
+ */
+async function withAllowance<T>(
+  orgId: string,
+  kind: AiKind,
+  run: () => Promise<T>,
+  keepsUnit: (err: unknown) => boolean,
+): Promise<T> {
+  const release = await reserveAiCall(orgId, kind);
+  try {
+    return await run();
+  } catch (err) {
+    if (!keepsUnit(err)) await release().catch(() => {});
+    throw err;
+  }
+}
+
+const extractionProcessed = (err: unknown) =>
+  err instanceof ExtractionRefusedError || err instanceof ExtractionUnreadableError;
 
 // Base64 is 4/3 the size of the file; allow a little slack for padding.
 const MAX_BASE64_CHARS = Math.ceil((MAX_DOCUMENT_BYTES * 4) / 3) + 16;
@@ -28,9 +53,7 @@ const documentInput = z.object({
 });
 
 function extractionError(err: unknown) {
-  if (err instanceof ExtractionRefusedError || err instanceof ExtractionUnreadableError) {
-    return err.message;
-  }
+  if (extractionProcessed(err) || err instanceof AiLimitReachedError) return err.message;
   console.error("AI extraction failed", err);
   return friendlyAiError(err);
 }
@@ -39,9 +62,14 @@ function extractionError(err: unknown) {
 export const extractDocument = createServerFn({ method: "POST" })
   .validator(documentInput)
   .handler(async ({ data }) => {
-    await requireUser();
+    const { orgId } = await requireUser();
     try {
-      const extraction = await extractInvoiceData(data);
+      const extraction = await withAllowance(
+        orgId,
+        "document",
+        () => extractInvoiceData(data),
+        extractionProcessed,
+      );
       return { ok: true as const, extraction };
     } catch (err) {
       return { ok: false as const, error: extractionError(err) };
@@ -52,11 +80,16 @@ export const extractDocument = createServerFn({ method: "POST" })
 export const checkDocument = createServerFn({ method: "POST" })
   .validator(documentInput)
   .handler(async ({ data }) => {
-    await requireUser();
+    const { orgId } = await requireUser();
     try {
-      const extraction = await extractInvoiceData(data);
-      const today = new Date().toISOString().slice(0, 10);
-      return { ok: true as const, extraction, report: checkExtractedInvoice(extraction, today) };
+      const extraction = await withAllowance(
+        orgId,
+        "document",
+        () => extractInvoiceData(data),
+        extractionProcessed,
+      );
+      const report = checkExtractedInvoice(extraction, riyadhTodayISO());
+      return { ok: true as const, extraction, report };
     } catch (err) {
       return { ok: false as const, error: extractionError(err) };
     }
@@ -83,9 +116,17 @@ export const askAssistant = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { orgId } = await requireUser();
     try {
-      return { ok: true as const, reply: await runAssistant(orgId, data.messages) };
+      const reply = await withAllowance(
+        orgId,
+        "assistant",
+        () => runAssistant(orgId, data.messages),
+        (err) => err instanceof AssistantRefusedError,
+      );
+      return { ok: true as const, reply };
     } catch (err) {
-      if (err instanceof AssistantRefusedError) return { ok: false as const, error: err.message };
+      if (err instanceof AssistantRefusedError || err instanceof AiLimitReachedError) {
+        return { ok: false as const, error: err.message };
+      }
       console.error("AI assistant failed", err);
       return { ok: false as const, error: friendlyAiError(err) };
     }

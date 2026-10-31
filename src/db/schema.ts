@@ -11,6 +11,7 @@ import {
   uniqueIndex,
   index,
   check,
+  primaryKey,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -140,6 +141,20 @@ export const invoiceItems = pgTable(
     vatRate: numeric("vat_rate", { precision: 5, scale: 2, mode: "number" }).notNull().default(15),
   },
   (t) => [index("invoice_items_invoice_idx").on(t.invoiceId)],
+).enableRLS();
+
+/** AI calls per organisation per Saudi calendar day, for the daily caps in ai-usage.server.ts. */
+export const aiUsage = pgTable(
+  "ai_usage",
+  {
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    day: date("day").notNull(),
+    kind: text("kind", { enum: ["document", "assistant"] }).notNull(),
+    count: integer("count").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.orgId, t.day, t.kind] })],
 ).enableRLS();
 
 export type Organization = typeof organizations.$inferSelect;

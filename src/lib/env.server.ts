@@ -9,6 +9,9 @@ const schema = z.object({
   DATABASE_URL: z.string().startsWith("postgres"),
   APP_URL: z.string().url().default("http://localhost:3000"),
   ANTHROPIC_API_KEY: z.string().optional(),
+  // Per organisation per Saudi calendar day; caps what one account can spend on AI.
+  AI_DAILY_DOCUMENT_LIMIT: z.coerce.number().int().positive().default(50),
+  AI_DAILY_ASSISTANT_LIMIT: z.coerce.number().int().positive().default(100),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().optional(),
 });
