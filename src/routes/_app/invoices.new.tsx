@@ -46,6 +46,7 @@ import {
   type PaymentView,
   type InvoiceItem,
 } from "@/lib/invoice-math";
+import { emailInvoice } from "@/server/email";
 import { companyQuery, customersQuery, invoiceQuery, invoicesQuery } from "@/lib/queries";
 import { saveInvoice, setInvoiceStatus } from "@/server/invoices";
 import { getInvoicePdf } from "@/server/pdf";
@@ -143,6 +144,8 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
   const { data: allDocs } = useSuspenseQuery(invoicesQuery());
   const locked = isIssued(inv);
   const credit = isCreditNote(inv);
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [emailTo, setEmailTo] = useState("");
   const payment = useMemo(
     () => paymentViews(allDocs, riyadhTodayISO()).get(inv.id),
     [allDocs, inv.id],
@@ -214,6 +217,16 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
       }
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Could not save invoice"),
+  });
+
+  const emailMutation = useMutation({
+    mutationFn: () => emailInvoice({ data: { id: inv.id, to: emailTo } }),
+    onSuccess: (res) => {
+      if (!res.ok) return toast.error(res.error);
+      setEmailOpen(false);
+      toast.success(`Sent to ${emailTo}`);
+    },
+    onError: () => toast.error("The email could not be sent. Please try again."),
   });
 
   const statusMutation = useMutation({
@@ -722,9 +735,15 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
                 <Button
                   variant="outline"
                   className="w-full"
-                  onClick={() => toast.info("Email delivery arrives in Phase 4")}
+                  disabled={!locked}
+                  title={locked ? undefined : "Issue the document before emailing it"}
+                  onClick={() => {
+                    setEmailTo(customers.find((c) => c.id === inv.customerId)?.email ?? "");
+                    setEmailOpen(true);
+                  }}
+                  data-testid="email-invoice"
                 >
-                  <Mail className="mr-1 h-4 w-4" /> Email invoice
+                  <Mail className="mr-1 h-4 w-4" /> Email {credit ? "credit note" : "invoice"}
                 </Button>
                 <Button variant="outline" className="w-full" onClick={() => window.print()}>
                   <Printer className="mr-1 h-4 w-4" /> Print
@@ -734,6 +753,42 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
           </Card>
         </div>
       </div>
+
+      <Dialog open={emailOpen} onOpenChange={setEmailOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Email {inv.number}</DialogTitle>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              emailMutation.mutate();
+            }}
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="email-to">Send to</Label>
+              <Input
+                id="email-to"
+                type="email"
+                required
+                value={emailTo}
+                onChange={(e) => setEmailTo(e.target.value)}
+                data-testid="email-to"
+              />
+              <p className="text-xs text-muted-foreground">
+                Sent as a PDF attachment under your company's name. Replies go to the email on your
+                company profile.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={emailMutation.isPending} data-testid="email-send">
+                {emailMutation.isPending ? "Sending…" : "Send"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-3xl">

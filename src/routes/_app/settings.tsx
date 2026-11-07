@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -65,7 +64,6 @@ function SettingsPage() {
       <Tabs defaultValue="preferences">
         <TabsList>
           <TabsTrigger value="preferences">Preferences</TabsTrigger>
-          <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="profile">Profile</TabsTrigger>
         </TabsList>
@@ -106,28 +104,6 @@ function SettingsPage() {
                   </SelectContent>
                 </Select>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="notifications" className="mt-4">
-          <Card className="shadow-soft">
-            <CardHeader>
-              <CardTitle className="text-base">Notification preferences</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Row
-                label="Email notifications"
-                desc="Receive invoice updates and payment reminders"
-                checked={settings.emailNotifs}
-                onChange={(v) => patch.mutate({ emailNotifs: v })}
-              />
-              <Row
-                label="SMS notifications"
-                desc="Text alerts for overdue invoices"
-                checked={settings.smsNotifs}
-                onChange={(v) => patch.mutate({ smsNotifs: v })}
-              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -192,28 +168,6 @@ function SettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
-  );
-}
-
-function Row({
-  label,
-  desc,
-  checked,
-  onChange,
-}: {
-  label: string;
-  desc: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border p-3">
-      <div>
-        <div className="text-sm font-medium">{label}</div>
-        <div className="text-xs text-muted-foreground">{desc}</div>
-      </div>
-      <Switch checked={checked} onCheckedChange={onChange} />
     </div>
   );
 }

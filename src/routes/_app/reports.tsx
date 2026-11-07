@@ -24,7 +24,6 @@ import {
   Legend,
 } from "recharts";
 import { FileDown } from "lucide-react";
-import { toast } from "sonner";
 
 export const Route = createFileRoute("/_app/reports")({
   loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(invoicesQuery()),
@@ -99,19 +98,8 @@ function Reports() {
         subtitle="Financial insights and VAT breakdowns"
         actions={
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() =>
-                toast.info("Report PDFs aren't available yet. Use CSV export for now.")
-              }
-            >
-              <FileDown className="mr-1 h-4 w-4" /> PDF
-            </Button>
-            <Button variant="outline" onClick={() => toast.info("Excel export arrives in Phase 4")}>
-              <FileDown className="mr-1 h-4 w-4" /> Excel
-            </Button>
             <Button variant="outline" onClick={exportCsv}>
-              <FileDown className="mr-1 h-4 w-4" /> CSV
+              <FileDown className="mr-1 h-4 w-4" /> Export CSV (opens in Excel)
             </Button>
           </div>
         }

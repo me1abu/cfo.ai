@@ -143,7 +143,7 @@ export const invoiceItems = pgTable(
   (t) => [index("invoice_items_invoice_idx").on(t.invoiceId)],
 ).enableRLS();
 
-/** AI calls per organisation per Saudi calendar day, for the daily caps in ai-usage.server.ts. */
+/** Metered calls per organisation per Saudi calendar day, for the caps in ai/usage.server.ts. */
 export const aiUsage = pgTable(
   "ai_usage",
   {
@@ -151,7 +151,7 @@ export const aiUsage = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
     day: date("day").notNull(),
-    kind: text("kind", { enum: ["document", "assistant"] }).notNull(),
+    kind: text("kind", { enum: ["document", "assistant", "email"] }).notNull(),
     count: integer("count").notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.orgId, t.day, t.kind] })],

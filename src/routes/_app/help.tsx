@@ -74,11 +74,11 @@ function Help() {
               ],
               [
                 "Can I upload documents?",
-                "Reading invoice data from uploaded documents with AI is in development and not available yet. The QR scanner already reads PNG, JPG and WebP images.",
+                "Yes. AI Upload reads a PDF or photo (up to 3 MB) into a draft invoice for you to review, and Invoice Validation checks invoices you received. AI can misread a document, so compare important values with the original. The QR scanner reads PNG, JPG and WebP images.",
               ],
               [
                 "Where is my data stored?",
-                "Data is stored with our database provider, Supabase, in its Singapore region (AWS ap-southeast-1), and is encrypted in transit.",
+                "Data is stored with our database provider, Supabase, in its Singapore region (AWS ap-southeast-1), and is encrypted in transit. The app runs on Vercel in Singapore. Documents you upload and questions you ask the assistant are sent to Anthropic's Claude AI to be processed, and invoices you email are sent through Resend.",
               ],
               [
                 "How is VAT calculated?",

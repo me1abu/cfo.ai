@@ -3,18 +3,23 @@ import { db, schema } from "@/db/client";
 import { riyadhTodayISO } from "@/lib/invoice-math";
 import { serverEnv } from "@/lib/env.server";
 
-export type AiKind = "document" | "assistant";
+export type AiKind = "document" | "assistant" | "email";
 
-const limitFor = (kind: AiKind) =>
-  kind === "document" ? serverEnv.AI_DAILY_DOCUMENT_LIMIT : serverEnv.AI_DAILY_ASSISTANT_LIMIT;
+const LIMITS: Record<AiKind, number> = {
+  document: serverEnv.AI_DAILY_DOCUMENT_LIMIT,
+  assistant: serverEnv.AI_DAILY_ASSISTANT_LIMIT,
+  email: serverEnv.DAILY_EMAIL_LIMIT,
+};
+
+const LIMIT_MESSAGES: Record<AiKind, (limit: number) => string> = {
+  document: (n) => `Your company has used today's ${n} AI document reads.`,
+  assistant: (n) => `Your company has asked the assistant ${n} questions today.`,
+  email: (n) => `Your company has sent today's ${n} invoice emails.`,
+};
 
 export class AiLimitReachedError extends Error {
   constructor(kind: AiKind, limit: number) {
-    super(
-      kind === "document"
-        ? `Your company has used today's ${limit} AI document reads. The limit resets at midnight Saudi time.`
-        : `Your company has asked the assistant ${limit} questions today. The limit resets at midnight Saudi time.`,
-    );
+    super(`${LIMIT_MESSAGES[kind](limit)} The limit resets at midnight Saudi time.`);
   }
 }
 
@@ -24,7 +29,7 @@ export class AiLimitReachedError extends Error {
  */
 export async function reserveAiCall(orgId: string, kind: AiKind): Promise<() => Promise<void>> {
   const day = riyadhTodayISO();
-  const limit = limitFor(kind);
+  const limit = LIMITS[kind];
   const t = schema.aiUsage;
   const rows = await db
     .insert(t)

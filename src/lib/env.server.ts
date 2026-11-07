@@ -12,6 +12,8 @@ const schema = z.object({
   // Per organisation per Saudi calendar day; caps what one account can spend on AI.
   AI_DAILY_DOCUMENT_LIMIT: z.coerce.number().int().positive().default(50),
   AI_DAILY_ASSISTANT_LIMIT: z.coerce.number().int().positive().default(100),
+  // Protects the sending domain's reputation if an account is misused.
+  DAILY_EMAIL_LIMIT: z.coerce.number().int().positive().default(50),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().optional(),
 });

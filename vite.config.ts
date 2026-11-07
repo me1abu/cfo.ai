@@ -23,6 +23,17 @@ export default defineConfig({
       // Run server functions in Singapore, next to the Supabase database (ap-southeast-1).
       // Vercel's default region is Washington DC, which would add a Pacific round trip per query.
       vercel: { functions: { regions: ["sin1"] } },
+      routeRules: {
+        "/**": {
+          headers: {
+            "X-Content-Type-Options": "nosniff",
+            "X-Frame-Options": "DENY",
+            "Referrer-Policy": "strict-origin-when-cross-origin",
+            // The QR scanner uses the camera.
+            "Permissions-Policy": "camera=(self), microphone=(), geolocation=()",
+          },
+        },
+      },
     }),
   ],
   resolve: {
