@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { requireUser } from "./context";
 import { loadCompany, toCompany } from "./data.server";
+import { nationalAddressInput } from "@/lib/national-address";
 
 const companyInput = z.object({
   name: z.string().trim().min(1, "Company name is required").max(200),
@@ -11,6 +12,7 @@ const companyInput = z.object({
   vatNumber: z.string().trim().max(30).default(""),
   crNumber: z.string().trim().max(30).default(""),
   address: z.string().trim().max(1000).default(""),
+  nationalAddress: nationalAddressInput,
   bank: z.string().trim().max(1000).default(""),
   email: z.string().trim().max(200).default(""),
   phone: z.string().trim().max(50).default(""),

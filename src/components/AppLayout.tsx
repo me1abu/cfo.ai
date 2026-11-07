@@ -22,6 +22,7 @@ import {
   Bell,
   Search,
   Bot,
+  PlugZap,
   Sparkles,
   X,
 } from "lucide-react";
@@ -53,6 +54,7 @@ const nav = [
   { to: "/qr-scanner", label: "QR Scanner", icon: QrCode },
   { to: "/customers", label: "Customers", icon: Users },
   { to: "/company", label: "Company Profile", icon: Building2 },
+  { to: "/zatca", label: "ZATCA Connection", icon: PlugZap },
   { to: "/reports", label: "Reports", icon: BarChart3 },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
   { to: "/help", label: "Help", icon: LifeBuoy },

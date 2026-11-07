@@ -3,6 +3,7 @@ import { listInvoices, getInvoice } from "@/server/invoices";
 import { listCustomers } from "@/server/customers";
 import { getCompany } from "@/server/company";
 import { getSettings } from "@/server/profile";
+import { getZatcaConnection } from "@/server/zatca";
 
 // Central query definitions so route loaders (SSR prefetch) and components share keys.
 export const invoicesQuery = () =>
@@ -16,6 +17,9 @@ export const customersQuery = () =>
 
 export const companyQuery = () =>
   queryOptions({ queryKey: ["company"], queryFn: () => getCompany() });
+
+export const zatcaQuery = () =>
+  queryOptions({ queryKey: ["zatca"], queryFn: () => getZatcaConnection() });
 
 export const settingsQuery = () =>
   queryOptions({ queryKey: ["settings"], queryFn: () => getSettings() });

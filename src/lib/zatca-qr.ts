@@ -81,6 +81,9 @@ export function encodeTlv(fields: TlvField[]): Uint8Array {
   return Uint8Array.from(parts);
 }
 
+// Phase 2's public key and CA signature are raw bytes, shown as Base64.
+const BINARY_TAGS = new Set([8, 9]);
+
 export function decodeTlv(bytes: Uint8Array): TlvField[] {
   const fields: TlvField[] = [];
   let i = 0;
@@ -94,10 +97,14 @@ export function decodeTlv(bytes: Uint8Array): TlvField[] {
     if (end > bytes.length)
       throw new ZatcaQrError(`Tag ${tag} declares ${length} bytes but the data ends early`);
     let value: string;
-    try {
-      value = utf8Strict.decode(bytes.subarray(start, end));
-    } catch {
-      throw new ZatcaQrError(`Tag ${tag} is not valid UTF-8`);
+    if (BINARY_TAGS.has(tag)) {
+      value = bytesToBase64(bytes.subarray(start, end));
+    } else {
+      try {
+        value = utf8Strict.decode(bytes.subarray(start, end));
+      } catch {
+        throw new ZatcaQrError(`Tag ${tag} is not valid UTF-8`);
+      }
     }
     fields.push({ tag, value });
     i = end;

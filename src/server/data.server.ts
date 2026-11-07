@@ -13,6 +13,7 @@ import {
   type Company,
   type Invoice,
   type InvoiceItem,
+  type ZatcaInfo,
 } from "@/lib/invoice-math";
 import type { OriginalInvoiceInfo } from "@/lib/zatca-rules";
 
@@ -22,6 +23,7 @@ export type Exec = typeof db | DbTx;
 function toInvoice(
   row: typeof schema.invoices.$inferSelect,
   items: (typeof schema.invoiceItems.$inferSelect)[],
+  zatca: ZatcaInfo | null,
 ): Invoice {
   return {
     id: row.id,
@@ -35,11 +37,13 @@ function toInvoice(
     customerName: row.customerName,
     customerVat: row.customerVat,
     customerAddress: row.customerAddress,
+    customerNationalAddress: row.customerNationalAddress,
     currency: row.currency,
     status: row.status,
     template: row.template,
     notes: row.notes,
     issuedAt: row.issuedAt ? row.issuedAt.toISOString() : null,
+    zatca,
     items: items
       .sort((a, b) => a.position - b.position)
       .map<InvoiceItem>((it) => ({
@@ -77,7 +81,24 @@ export async function loadDocs(exec: Exec, orgId: string, where?: SQL): Promise<
     list.push(it);
     byInvoice.set(it.invoiceId, list);
   }
-  return rows.map((r) => toInvoice(r, byInvoice.get(r.id) ?? []));
+  const z = schema.zatcaDocuments;
+  const zatcaRows = await exec
+    .select({
+      invoiceId: z.invoiceId,
+      status: z.status,
+      qr: z.qr,
+      warnings: z.warnings,
+      errors: z.errors,
+    })
+    .from(z)
+    .where(
+      inArray(
+        z.invoiceId,
+        rows.map((r) => r.id),
+      ),
+    );
+  const zatcaByInvoice = new Map(zatcaRows.map(({ invoiceId, ...info }) => [invoiceId, info]));
+  return rows.map((r) => toInvoice(r, byInvoice.get(r.id) ?? [], zatcaByInvoice.get(r.id) ?? null));
 }
 
 /** Loads one document scoped to the organisation. */
@@ -127,6 +148,7 @@ export const toCompany = (o: typeof schema.organizations.$inferSelect): Company 
   vatNumber: o.vatNumber,
   crNumber: o.crNumber,
   address: o.address,
+  nationalAddress: o.nationalAddress,
   bank: o.bank,
   email: o.email,
   phone: o.phone,

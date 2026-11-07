@@ -4,6 +4,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { requireUser } from "./context";
 import type { Customer } from "@/lib/invoice-math";
+import { nationalAddressInput } from "@/lib/national-address";
 
 const customerInput = z.object({
   id: z.string().uuid().optional(),
@@ -11,6 +12,7 @@ const customerInput = z.object({
   vatNumber: z.string().trim().max(30).default(""),
   crNumber: z.string().trim().max(30).default(""),
   address: z.string().trim().max(1000).default(""),
+  nationalAddress: nationalAddressInput,
   email: z.string().trim().max(200).default(""),
   phone: z.string().trim().max(50).default(""),
   notes: z.string().max(2000).default(""),
@@ -23,6 +25,7 @@ const toCustomer = (r: typeof schema.customers.$inferSelect): Customer => ({
   vatNumber: r.vatNumber,
   crNumber: r.crNumber,
   address: r.address,
+  nationalAddress: r.nationalAddress,
   email: r.email,
   phone: r.phone,
   notes: r.notes,

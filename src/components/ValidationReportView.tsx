@@ -48,8 +48,8 @@ export function ValidationReportView({ report }: { report: ValidationReport }) {
         ))}
       </ul>
       <p className="text-xs text-muted-foreground">
-        Checks cover ZATCA tax-invoice content rules and the Phase 1 QR code. Phase 2 integration
-        (XML, cryptographic stamp and reporting to ZATCA) is not covered yet.
+        Checks cover ZATCA tax-invoice content rules and the Phase 1 QR code. For companies
+        connected to ZATCA, ZATCA runs its own full checks when a document is issued.
       </p>
     </div>
   );

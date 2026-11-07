@@ -1,3 +1,4 @@
+import { NationalAddressFields } from "@/components/NationalAddressFields";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/AppLayout";
@@ -98,6 +99,13 @@ function CompanyPage() {
               <Input
                 value={form.crNumber}
                 onChange={(e) => setForm({ ...form, crNumber: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>National Address</Label>
+              <NationalAddressFields
+                value={form.nationalAddress}
+                onChange={(nationalAddress) => setForm({ ...form, nationalAddress })}
               />
             </div>
             <div className="space-y-1.5">

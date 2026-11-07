@@ -47,6 +47,9 @@ import {
   type InvoiceItem,
 } from "@/lib/invoice-math";
 import { emailInvoice } from "@/server/email";
+import { retryZatcaSubmission } from "@/server/zatca";
+import { NationalAddressFields } from "@/components/NationalAddressFields";
+import { ZatcaPanel } from "@/components/ZatcaPanel";
 import { companyQuery, customersQuery, invoiceQuery, invoicesQuery } from "@/lib/queries";
 import { saveInvoice, setInvoiceStatus } from "@/server/invoices";
 import { getInvoicePdf } from "@/server/pdf";
@@ -204,6 +207,14 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
       if (!res.ok) return toast.error(res.error);
       await queryClient.invalidateQueries({ queryKey: ["invoices"] });
       const label = credit ? "Credit note" : "Invoice";
+      if (res.zatca.status === "rejected") {
+        toast.error(`ZATCA rejected ${saved.number}. It's back to draft so you can fix it.`);
+        await queryClient.invalidateQueries({ queryKey: ["zatca"] });
+        return navigate({ to: "/invoices/$id", params: { id: res.id } });
+      }
+      if (res.zatca.status === "pending") {
+        toast.warning("Saved, but ZATCA didn't answer. Retry from this page.");
+      }
       toast.success(saved.status === "draft" ? `${label} saved as draft` : `${label} issued`);
       if (mode === "new") {
         navigate({ to: "/invoices/$id", params: { id: res.id } });
@@ -217,6 +228,22 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
       }
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Could not save invoice"),
+  });
+
+  const retry = useMutation({
+    mutationFn: () => retryZatcaSubmission({ data: { id: inv.id } }),
+    onSuccess: async (res) => {
+      await queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      const fresh = await queryClient.fetchQuery(invoiceQuery(inv.id));
+      if (fresh) {
+        setInv(fresh);
+        setSavedSnapshot(JSON.stringify(fresh));
+      }
+      if (res.status === "pending") toast.warning("ZATCA still isn't answering. Try again soon.");
+      else if (res.status === "rejected") toast.error("ZATCA rejected this document.");
+      else toast.success("Accepted by ZATCA");
+    },
+    onError: () => toast.error("Could not reach ZATCA"),
   });
 
   const emailMutation = useMutation({
@@ -259,6 +286,7 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
         customerName: c.name,
         customerVat: c.vatNumber,
         customerAddress: c.address,
+        customerNationalAddress: c.nationalAddress ?? null,
       });
   };
 
@@ -380,6 +408,10 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {inv.zatca && (
+        <ZatcaPanel zatca={inv.zatca} retrying={retry.isPending} onRetry={() => retry.mutate()} />
       )}
 
       {credit && (
@@ -588,6 +620,15 @@ export function InvoiceEditor({ mode, initial }: { mode: "new" | "edit"; initial
                   />
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
+                  {inv.customerVat.trim() && (
+                    <div className="mb-3 space-y-2">
+                      <Label>National Address (needed for ZATCA)</Label>
+                      <NationalAddressFields
+                        value={inv.customerNationalAddress}
+                        onChange={(customerNationalAddress) => update({ customerNationalAddress })}
+                      />
+                    </div>
+                  )}
                   <Label>Address</Label>
                   <Textarea
                     value={inv.customerAddress}

@@ -14,6 +14,11 @@ export type InvoiceQr =
 export function useInvoiceQr(inv: Invoice, company: Company): InvoiceQr {
   return useMemo(() => {
     try {
+      // Once signed for ZATCA, the document's own QR is the only valid one.
+      if (inv.zatca && inv.zatca.status !== "rejected") {
+        const timestamp = invoiceQrTimestamp(inv.date, inv.issuedAt);
+        return { ok: true, payload: inv.zatca.qr, timestamp, isPreview: false };
+      }
       const totals = computeTotals(inv.items);
       const timestamp = invoiceQrTimestamp(inv.date, inv.issuedAt);
       const payload = buildPhase1Qr({
@@ -28,7 +33,7 @@ export function useInvoiceQr(inv: Invoice, company: Company): InvoiceQr {
       if (err instanceof ZatcaQrError) return { ok: false, error: err.message };
       throw err;
     }
-  }, [inv.items, inv.date, inv.issuedAt, company.name, company.vatNumber]);
+  }, [inv.items, inv.date, inv.issuedAt, inv.zatca, company.name, company.vatNumber]);
 }
 
 export async function downloadQrPng(payload: string, filename: string) {

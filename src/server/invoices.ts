@@ -6,6 +6,9 @@ import { requireUser } from "./context";
 import { loadCompany, loadDocs, loadInvoice, loadOriginalInfo } from "./data.server";
 import type { Invoice } from "@/lib/invoice-math";
 import { validateInvoice, type OriginalInvoiceInfo } from "@/lib/zatca-rules";
+import { nationalAddressInput } from "@/lib/national-address";
+import { zatcaBlockers } from "@/lib/zatca-phase2";
+import { type ZatcaOutcome, getUnit, submitToZatca } from "./zatca/service.server";
 
 const LOCKED_ERROR =
   "This document has been issued and can't be changed or deleted. To correct an issued invoice, issue a credit note.";
@@ -31,6 +34,7 @@ const invoiceInput = z.object({
   customerName: z.string().trim().min(1, "Customer name is required").max(200),
   customerVat: z.string().trim().max(30).default(""),
   customerAddress: z.string().trim().max(1000).default(""),
+  customerNationalAddress: nationalAddressInput,
   currency: z.string().trim().length(3),
   status: z.enum(["draft", "unpaid", "paid", "overdue"]),
   template: z.enum(["modern", "corporate", "minimal", "arabic", "bilingual"]),
@@ -81,6 +85,7 @@ export const saveInvoice = createServerFn({ method: "POST" })
           customerName: data.customerName,
           customerVat: data.customerVat,
           customerAddress: data.customerAddress,
+          customerNationalAddress: data.customerNationalAddress,
           currency: data.currency.toUpperCase(),
         };
         let original: OriginalInvoiceInfo | null = null;
@@ -99,6 +104,9 @@ export const saveInvoice = createServerFn({ method: "POST" })
           if (loaded.original.documentType !== "invoice" || !loaded.original.issuedAt) {
             throw new SaveRejected("Credit notes can only amend an issued invoice.");
           }
+          if (loaded.original.zatca?.status === "pending") {
+            throw new SaveRejected("Wait for ZATCA to accept the invoice first.");
+          }
           original = loaded.info;
           // A credit note always concerns the original invoice's customer and currency.
           customer = {
@@ -106,6 +114,7 @@ export const saveInvoice = createServerFn({ method: "POST" })
             customerName: loaded.original.customerName,
             customerVat: loaded.original.customerVat,
             customerAddress: loaded.original.customerAddress,
+            customerNationalAddress: loaded.original.customerNationalAddress ?? null,
             currency: loaded.original.currency,
           };
         } else {
@@ -130,6 +139,12 @@ export const saveInvoice = createServerFn({ method: "POST" })
             throw new SaveRejected(
               `Can't issue yet. Fix: ${failed.join(", ")}. Use Validate to see details.`,
             );
+          }
+          if (await getUnit(orgId)) {
+            const blockers = zatcaBlockers(candidate, company);
+            if (blockers.length) {
+              throw new SaveRejected(`To send this to ZATCA, add ${blockers.join("; ")}.`);
+            }
           }
         }
 
@@ -179,7 +194,9 @@ export const saveInvoice = createServerFn({ method: "POST" })
         );
         return invoiceId;
       });
-      return { ok: true as const, id };
+      // After the commit: ZATCA can take seconds, and no database lock should wait on it.
+      const zatca: ZatcaOutcome = finalizing ? await submitToZatca(orgId, id) : { status: "none" };
+      return { ok: true as const, id, zatca };
     } catch (err) {
       if (err instanceof SaveRejected) return { ok: false as const, error: err.message };
       if (err instanceof Error && /invoices_org_number_uq/.test(err.message)) {

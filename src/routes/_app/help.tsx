@@ -70,7 +70,7 @@ function Help() {
             {[
               [
                 "Does AI Invoice support ZATCA e-invoicing?",
-                "Not yet. AI Invoice supports ZATCA Phase 1 (generation): tax invoices with the required fields in Arabic and English, validation against ZATCA's published rules, and the Phase 1 QR code. Phase 2 (integration with the FATOORA platform: XML invoices, cryptographic stamps and reporting or clearance with ZATCA) is not supported yet. Check with ZATCA or your tax advisor whether your business is already required to integrate.",
+                "Yes. AI Invoice creates tax invoices in Arabic and English with the required fields and QR code (Phase 1). To connect to ZATCA's FATOORA platform (Phase 2), open ZATCA Connection and enter an OTP from your FATOORA portal: standard invoices are then cleared by ZATCA before you can share them, and simplified invoices are reported. Zero-rated or exempt lines and currencies other than SAR can't be sent to ZATCA yet. You remain responsible for your own compliance, so check with your tax advisor if you're unsure.",
               ],
               [
                 "Can I upload documents?",

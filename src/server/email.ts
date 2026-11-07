@@ -6,6 +6,7 @@ import { EmailNotConfiguredError, EmailSendError, sendEmail } from "./email.serv
 import { AiLimitReachedError, reserveAiCall } from "./ai/usage.server";
 import { serverEnv } from "@/lib/env.server";
 import { isIssued } from "@/lib/invoice-math";
+import { CLEARANCE_PENDING, needsClearance } from "@/lib/zatca-rules";
 import { invoiceEmailContent, senderHeader } from "@/lib/invoice-email";
 
 /** Emails an issued invoice or credit note to a customer as a PDF attachment. */
@@ -22,6 +23,7 @@ export const emailInvoice = createServerFn({ method: "POST" })
       if (!isIssued(doc.invoice)) {
         return { ok: false as const, error: "Issue the document before emailing it." };
       }
+      if (needsClearance(doc.invoice)) return { ok: false as const, error: CLEARANCE_PENDING };
       const release = await reserveAiCall(orgId, "email");
       try {
         await sendEmail({

@@ -26,6 +26,7 @@ import { Route as AppReportsRouteImport } from './routes/_app/reports'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppUploadRouteImport } from './routes/_app/upload'
 import { Route as AppValidationRouteImport } from './routes/_app/validation'
+import { Route as AppZatcaRouteImport } from './routes/_app/zatca'
 import { Route as AppCreditNotesNewRouteImport } from './routes/_app/credit-notes.new'
 import { Route as AppInvoicesIndexRouteImport } from './routes/_app/invoices.index'
 import { Route as AppInvoicesIdRouteImport } from './routes/_app/invoices.$id'
@@ -115,6 +116,11 @@ const AppValidationRoute = AppValidationRouteImport.update({
   path: '/validation',
   getParentRoute: () => AppRoute,
 } as any)
+const AppZatcaRoute = AppZatcaRouteImport.update({
+  id: '/zatca',
+  path: '/zatca',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppCreditNotesNewRoute = AppCreditNotesNewRouteImport.update({
   id: '/credit-notes/new',
   path: '/credit-notes/new',
@@ -153,6 +159,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AppSettingsRoute
   '/upload': typeof AppUploadRoute
   '/validation': typeof AppValidationRoute
+  '/zatca': typeof AppZatcaRoute
   '/credit-notes/new': typeof AppCreditNotesNewRoute
   '/invoices/$id': typeof AppInvoicesIdRoute
   '/invoices/new': typeof AppInvoicesNewRoute
@@ -174,6 +181,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AppSettingsRoute
   '/upload': typeof AppUploadRoute
   '/validation': typeof AppValidationRoute
+  '/zatca': typeof AppZatcaRoute
   '/credit-notes/new': typeof AppCreditNotesNewRoute
   '/invoices/$id': typeof AppInvoicesIdRoute
   '/invoices/new': typeof AppInvoicesNewRoute
@@ -198,6 +206,7 @@ export interface FileRoutesById {
   '/_app/settings': typeof AppSettingsRoute
   '/_app/upload': typeof AppUploadRoute
   '/_app/validation': typeof AppValidationRoute
+  '/_app/zatca': typeof AppZatcaRoute
   '/_app/credit-notes/new': typeof AppCreditNotesNewRoute
   '/_app/invoices/$id': typeof AppInvoicesIdRoute
   '/_app/invoices/new': typeof AppInvoicesNewRoute
@@ -222,6 +231,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/upload'
     | '/validation'
+    | '/zatca'
     | '/credit-notes/new'
     | '/invoices/$id'
     | '/invoices/new'
@@ -243,6 +253,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/upload'
     | '/validation'
+    | '/zatca'
     | '/credit-notes/new'
     | '/invoices/$id'
     | '/invoices/new'
@@ -266,6 +277,7 @@ export interface FileRouteTypes {
     | '/_app/settings'
     | '/_app/upload'
     | '/_app/validation'
+    | '/_app/zatca'
     | '/_app/credit-notes/new'
     | '/_app/invoices/$id'
     | '/_app/invoices/new'
@@ -403,6 +415,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppValidationRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/zatca': {
+      id: '/_app/zatca'
+      path: '/zatca'
+      fullPath: '/zatca'
+      preLoaderRoute: typeof AppZatcaRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/credit-notes/new': {
       id: '/_app/credit-notes/new'
       path: '/credit-notes/new'
@@ -461,6 +480,7 @@ interface AppRouteChildren {
   AppSettingsRoute: typeof AppSettingsRoute
   AppUploadRoute: typeof AppUploadRoute
   AppValidationRoute: typeof AppValidationRoute
+  AppZatcaRoute: typeof AppZatcaRoute
   AppCreditNotesNewRoute: typeof AppCreditNotesNewRoute
 }
 
@@ -475,6 +495,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppSettingsRoute: AppSettingsRoute,
   AppUploadRoute: AppUploadRoute,
   AppValidationRoute: AppValidationRoute,
+  AppZatcaRoute: AppZatcaRoute,
   AppCreditNotesNewRoute: AppCreditNotesNewRoute,
 }
 

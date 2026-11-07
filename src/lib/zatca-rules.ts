@@ -496,3 +496,10 @@ export function originalInfoFromDocs(inv: Invoice, docs: Invoice[]): OriginalInv
     creditable: Math.round((computeTotals(original.items).total - credited) * 100) / 100,
   };
 }
+
+export const CLEARANCE_PENDING =
+  "ZATCA hasn't cleared this document yet, so it can't be shared. Retry from the document page.";
+
+/** A standard document isn't a valid invoice until ZATCA clears it, so it can't be shared. */
+export const needsClearance = (inv: Invoice) =>
+  inv.zatca?.status === "pending" && invoiceKind(inv) === "standard";

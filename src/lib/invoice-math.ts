@@ -5,6 +5,31 @@ export type InvoiceTemplate = "modern" | "corporate" | "minimal" | "arabic" | "b
 /** "credit_note" reduces a previously issued invoice (ZATCA Tax Invoicing Guideline s.7). */
 export type DocumentType = "invoice" | "credit_note";
 
+/** Saudi National Address, required on ZATCA Phase 2 documents. */
+export interface NationalAddress {
+  street: string;
+  building: string;
+  district: string;
+  city: string;
+  postalCode: string;
+}
+
+/** pending: signed, ZATCA's answer not received yet. Only standard documents block on this. */
+export type ZatcaStatus = "pending" | "cleared" | "reported" | "rejected";
+
+export interface ZatcaMessage {
+  code: string;
+  message: string;
+}
+
+/** What ZATCA said about a document. Absent for documents that never went to ZATCA. */
+export interface ZatcaInfo {
+  status: ZatcaStatus;
+  qr: string;
+  warnings: ZatcaMessage[];
+  errors: ZatcaMessage[];
+}
+
 export interface InvoiceItem {
   id: string;
   description: string;
@@ -28,6 +53,8 @@ export interface Invoice {
   customerName: string;
   customerVat: string;
   customerAddress: string;
+  /** Needed on standard documents sent to ZATCA. */
+  customerNationalAddress?: NationalAddress | null;
   currency: string;
   items: InvoiceItem[];
   status: InvoiceStatus;
@@ -35,6 +62,7 @@ export interface Invoice {
   template: InvoiceTemplate;
   /** ISO timestamp set by the server when the invoice first leaves draft; null for drafts. */
   issuedAt: string | null;
+  zatca?: ZatcaInfo | null;
 }
 
 /** Issued documents are locked: content can't change, only payment status. */
@@ -56,6 +84,7 @@ export interface Customer {
   vatNumber: string;
   crNumber: string;
   address: string;
+  nationalAddress?: NationalAddress | null;
   email: string;
   phone: string;
   notes: string;
@@ -67,6 +96,7 @@ export interface Company {
   vatNumber: string;
   crNumber: string;
   address: string;
+  nationalAddress?: NationalAddress | null;
   bank: string;
   email: string;
   phone: string;

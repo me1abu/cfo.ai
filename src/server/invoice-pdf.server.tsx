@@ -466,6 +466,9 @@ export function InvoicePdf({ invoice: inv, company, qr, original }: InvoicePdfPr
 
 /** Builds the QR image for the PDF. Missing seller data yields an explanation, not a crash. */
 export async function buildPdfQr(inv: Invoice, company: Company): Promise<InvoicePdfProps["qr"]> {
+  if (inv.zatca && inv.zatca.status !== "rejected") {
+    return { dataUrl: await QRCode.toDataURL(inv.zatca.qr, { ...QR_IMAGE_OPTIONS, width: 400 }) };
+  }
   try {
     const totals = computeTotals(inv.items);
     const payload = buildPhase1Qr({

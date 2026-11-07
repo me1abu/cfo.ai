@@ -14,6 +14,10 @@ const schema = z.object({
   AI_DAILY_ASSISTANT_LIMIT: z.coerce.number().int().positive().default(100),
   // Protects the sending domain's reputation if an account is misused.
   DAILY_EMAIL_LIMIT: z.coerce.number().int().positive().default(50),
+  // Which ZATCA gateway to use. Must match where customers generate their OTP.
+  ZATCA_ENVIRONMENT: z.enum(["developer-portal", "simulation", "core"]).default("developer-portal"),
+  // 32 random bytes, Base64. Encrypts customers' signing keys; changing it strands them.
+  ZATCA_KEY_SECRET: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().optional(),
 });

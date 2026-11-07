@@ -144,3 +144,14 @@ describe("generated QR image is scannable", () => {
     expect(parseZatcaQr(result!.data).fields.sellerName).toBe("نوى للتقنية Nawa Technologies LLC");
   });
 });
+
+describe("Phase 2 QR codes", () => {
+  it("reads binary public key and CA signature tags as Base64", () => {
+    const bytes = Uint8Array.from([1, 1, 65, 8, 3, 0xff, 0xfe, 0x80, 9, 2, 0x80, 0x81]);
+    expect(decodeTlv(bytes)).toEqual([
+      { tag: 1, value: "A" },
+      { tag: 8, value: "//6A" },
+      { tag: 9, value: "gIE=" },
+    ]);
+  });
+});

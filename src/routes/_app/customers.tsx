@@ -1,3 +1,4 @@
+import { NationalAddressFields } from "@/components/NationalAddressFields";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/AppLayout";
@@ -255,6 +256,13 @@ function Customers() {
                 <Input
                   value={editing.phone}
                   onChange={(e) => setEditing({ ...editing, phone: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label>National Address (needed on ZATCA standard invoices)</Label>
+                <NationalAddressFields
+                  value={editing.nationalAddress}
+                  onChange={(nationalAddress) => setEditing({ ...editing, nationalAddress })}
                 />
               </div>
               <div className="space-y-1.5 sm:col-span-2">

@@ -43,6 +43,13 @@
       "when": 1793460669703,
       "tag": "0005_ai_usage",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794068688888,
+      "tag": "0006_zatca_phase2",
+      "breakpoints": true
     }
   ]
 }

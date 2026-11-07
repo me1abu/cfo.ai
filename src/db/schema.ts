@@ -12,9 +12,11 @@ import {
   index,
   check,
   primaryKey,
+  jsonb,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+import type { NationalAddress, ZatcaMessage, ZatcaStatus } from "@/lib/invoice-math";
 
 export const invoiceStatus = pgEnum("invoice_status", ["draft", "unpaid", "paid", "overdue"]);
 // "credit_note" reduces a previously issued tax invoice (ZATCA Tax Invoicing Guideline s.7).
@@ -37,6 +39,7 @@ export const organizations = pgTable("organizations", {
   vatNumber: text("vat_number").notNull().default(""),
   crNumber: text("cr_number").notNull().default(""),
   address: text("address").notNull().default(""),
+  nationalAddress: jsonb("national_address").$type<NationalAddress>(),
   bank: text("bank").notNull().default(""),
   email: text("email").notNull().default(""),
   phone: text("phone").notNull().default(""),
@@ -74,6 +77,7 @@ export const customers = pgTable(
     vatNumber: text("vat_number").notNull().default(""),
     crNumber: text("cr_number").notNull().default(""),
     address: text("address").notNull().default(""),
+    nationalAddress: jsonb("national_address").$type<NationalAddress>(),
     email: text("email").notNull().default(""),
     phone: text("phone").notNull().default(""),
     notes: text("notes").notNull().default(""),
@@ -105,6 +109,7 @@ export const invoices = pgTable(
     customerName: text("customer_name").notNull(),
     customerVat: text("customer_vat").notNull().default(""),
     customerAddress: text("customer_address").notNull().default(""),
+    customerNationalAddress: jsonb("customer_national_address").$type<NationalAddress>(),
     currency: text("currency").notNull().default("SAR"),
     status: invoiceStatus("status").notNull().default("draft"),
     template: invoiceTemplate("template").notNull().default("modern"),
@@ -155,6 +160,54 @@ export const aiUsage = pgTable(
     count: integer("count").notNull().default(0),
   },
   (t) => [primaryKey({ columns: [t.orgId, t.day, t.kind] })],
+).enableRLS();
+
+/**
+ * An organisation's connection to ZATCA (its EGS unit). Written once, after onboarding succeeds.
+ * The private key and secret are encrypted with ZATCA_KEY_SECRET (zatca/vault.server.ts).
+ */
+export const zatcaUnits = pgTable("zatca_units", {
+  orgId: uuid("org_id")
+    .primaryKey()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  environment: text("environment", { enum: ["developer-portal", "simulation", "core"] }).notNull(),
+  commonName: text("common_name").notNull(),
+  serial: text("serial").notNull(),
+  privateKey: text("private_key").notNull(),
+  /** The production CSID's binarySecurityToken. */
+  token: text("token").notNull(),
+  secret: text("secret").notNull(),
+  certificateExpiresAt: timestamp("certificate_expires_at", { withTimezone: true }).notNull(),
+  // The invoice chain: each document carries the next counter and the previous document's hash.
+  lastCounter: integer("last_counter").notNull().default(0),
+  lastHash: text("last_hash").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}).enableRLS();
+
+/** The signed document and ZATCA's answer, kept separate so invoice lists don't load the XML. */
+export const zatcaDocuments = pgTable(
+  "zatca_documents",
+  {
+    invoiceId: uuid("invoice_id")
+      .primaryKey()
+      .references(() => invoices.id, { onDelete: "cascade" }),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    uuid: uuid("uuid").notNull(),
+    counter: integer("counter").notNull(),
+    hash: text("hash").notNull(),
+    qr: text("qr").notNull(),
+    status: text("status").$type<ZatcaStatus>().notNull(),
+    signedXml: text("signed_xml").notNull(),
+    /** Standard documents: the version ZATCA stamped, which is the legal invoice. */
+    clearedXml: text("cleared_xml"),
+    warnings: jsonb("warnings").$type<ZatcaMessage[]>().notNull().default([]),
+    errors: jsonb("errors").$type<ZatcaMessage[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("zatca_documents_org_idx").on(t.orgId)],
 ).enableRLS();
 
 export type Organization = typeof organizations.$inferSelect;
